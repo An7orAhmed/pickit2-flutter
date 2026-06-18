@@ -2,6 +2,10 @@
 
 For continuing development from where we left off in the pickit2_flutter project.
 
+## Original Source Code
+
+pk2cmd: `/Users/an7or/MyWork/pk2cmd`
+
 ## Current State
 
 The project has implemented:

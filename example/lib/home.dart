@@ -192,10 +192,10 @@ class HomeScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildActionButton(FontAwesomeIcons.download, 'Program', enabled: controller.connected),
-                  _buildActionButton(FontAwesomeIcons.shield, 'Verify', enabled: controller.connected),
-                  _buildActionButton(FontAwesomeIcons.trash, 'Erase', enabled: controller.connected),
-                  _buildActionButton(FontAwesomeIcons.file, 'Read', enabled: controller.connected),
+                  _buildActionButton(FontAwesomeIcons.download, 'Program', enabled: controller.connected && controller.chipSelected),
+                  _buildActionButton(FontAwesomeIcons.shield, 'Verify', enabled: controller.connected && controller.chipSelected),
+                  _buildActionButton(FontAwesomeIcons.trash, 'Erase', enabled: controller.connected && controller.chipSelected),
+                  _buildActionButton(FontAwesomeIcons.file, 'Read', enabled: controller.connected && controller.chipSelected),
                 ],
               ),
               const SizedBox(height: 20),
@@ -242,7 +242,10 @@ class HomeScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(controller.serialNumber, style: const TextStyle(color: Colors.white70)),
+                    Text(
+                      "${controller.serialNumber} | OS v${controller.programmerFirmware}",
+                      style: const TextStyle(color: Colors.white70),
+                    ),
                   ],
                 ),
               ),
@@ -312,13 +315,18 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  controller.firmwareName,
+                  controller.firmwareName == 'N/A' ? 'Import Firmware' : controller.firmwareName,
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
-                Text('${controller.firmwareSize} · ${controller.firmwareType}', style: const TextStyle(color: Colors.white54)),
+                Text(
+                  controller.firmwareName == 'N/A'
+                      ? 'Tap the folder icon to load a .hex or .bin file'
+                      : '${controller.firmwareSize} · ${controller.firmwareType}',
+                  style: const TextStyle(color: Colors.white54),
+                ),
               ],
             ),
           ),
@@ -358,9 +366,16 @@ class HomeScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(controller.targetDevice, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                    Text(
+                      controller.targetDevice,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: controller.chipSelected ? Colors.white : Colors.white38,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text(controller.deviceFamily, style: const TextStyle(color: Colors.white54)),
+                    Text(controller.deviceFamily, style: TextStyle(color: controller.chipSelected ? Colors.white54 : Colors.white24)),
                   ],
                 ),
               ),
@@ -396,17 +411,10 @@ class HomeScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              _buildStatTile('Device ID', controller.deviceId),
               _buildStatTile('Flash Size', controller.flashSize),
               _buildStatTile('RAM Size', controller.ramSize),
               _buildStatTile('EEPROM Size', controller.eepromSize),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildStatTile('Programmer Firmware', controller.programmerFirmware),
-              _buildStatTile('Device ID', controller.deviceId),
             ],
           ),
         ],

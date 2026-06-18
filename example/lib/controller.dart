@@ -11,21 +11,22 @@ class HomeController extends ChangeNotifier {
   int progress = 0;
   bool programming = false;
 
-  String firmwareName = 'firmware_v1.2.hex';
-  String firmwareSize = '128.45 KB';
-  String firmwareType = 'Intel HEX';
+  String firmwareName = 'N/A';
+  String firmwareSize = '0 B';
+  String firmwareType = 'None';
 
   String deviceName = 'PICkit2';
-  String targetDevice = 'PIC18F4550';
+  String targetDevice = 'Select a Chip';
   String serialNumber = 'N/A';
-  String deviceFamily = 'PIC18 Family';
-  String flashSize = '32 KB';
-  String ramSize = '2 KB';
-  String eepromSize = '256 B';
-  String programmerFirmware = '04.61.00';
-  String deviceId = '0x0013';
+  String deviceFamily = 'Import Firmware';
+  String flashSize = 'N/A';
+  String ramSize = 'N/A';
+  String eepromSize = 'N/A';
+  String programmerFirmware = '0';
+  String deviceId = 'N/A';
   String selectedChipFamily = allFamiliesOption;
   bool chipCatalogLoaded = false;
+  bool chipSelected = false;
 
   String get statusLabel => connected ? 'Ready' : 'Offline';
 
@@ -69,10 +70,6 @@ class HomeController extends ChangeNotifier {
       if (chipCatalogLoaded) {
         final preferredFamily = chipCatalog.containsKey(deviceFamily) ? deviceFamily : allFamiliesOption;
         selectedChipFamily = preferredFamily;
-
-        final familyModels = getModelsByFamily(preferredFamily);
-        final currentModel = familyModels.firstWhere((row) => row['model'] == targetDevice, orElse: () => familyModels.first);
-        selectChipByFamilyAndModel(preferredFamily, currentModel);
         connectionStatus = 'Chip data loaded';
       } else {
         connectionStatus = 'No chip data available';
@@ -104,6 +101,7 @@ class HomeController extends ChangeNotifier {
     ramSize = model['ramSize'] ?? 'N/A';
     eepromSize = model['eepromSize'] ?? 'N/A';
     deviceId = model['deviceId'] ?? 'N/A';
+    chipSelected = true;
     connectionStatus = 'Selected chip: $targetDevice';
     notifyListeners();
   }
@@ -137,6 +135,7 @@ class HomeController extends ChangeNotifier {
       eepromSize = 'N/A';
       deviceId = 'N/A';
       selectedChipFamily = allFamiliesOption;
+      chipSelected = false;
       connectionStatus = 'Chip auto-detect failed';
       notifyListeners();
       return;
@@ -200,6 +199,7 @@ class HomeController extends ChangeNotifier {
       connectionStatus = "Disconnected";
       serialNumber = 'N/A';
       programmerFirmware = 'N/A';
+      chipSelected = false;
     } catch (error) {
       connectionStatus = 'Disconnect failed';
       connected = false;

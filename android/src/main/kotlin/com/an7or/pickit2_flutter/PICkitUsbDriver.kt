@@ -9,6 +9,7 @@ import android.hardware.usb.*
 import android.os.Build
 import android.util.Log
 import java.io.IOException
+import java.nio.charset.Charset
 import kotlin.math.max
 import kotlin.math.min
 
@@ -225,17 +226,15 @@ class PICkitUsbDriver(private val context: Context) {
     }
 
     val fwBytes = readFirmwareVersion()
-    // Response format: Major, Minor, Dot at bytes 1, 2, 3 (HID report has 1-byte ID at position 0)
-    // Bootloader detection: if byte[1] == 0x76 ('v'), read from bytes 7, 8
-    return if (fwBytes[1].toInt() == 0x76 && fwBytes.size >= 9 && fwBytes[6].toInt() == 0x42 /* 'B' */) {
-      // Bootloader mode
+    if (fwBytes[1].toInt() == 0x76 && fwBytes.size >= 9 && fwBytes[6].toInt() == 0x42) {
       val major = fwBytes[7].toInt() and 0xFF
       val minor = fwBytes[8].toInt() and 0xFF
-      "$major.$minor"
-    } else {
-      // Normal mode - format with 2-digit padding for minor and dot
-      String.format("%d.%02d.%02d", fwBytes[1].toInt() and 0xFF, fwBytes[2].toInt() and 0xFF, fwBytes[3].toInt() and 0xFF)
+      return "$major.$minor"
     }
+    if (fwBytes.size >= 3) {
+      return String.format("%d.%02d.%02d", fwBytes[0].toInt() and 0xFF, fwBytes[1].toInt() and 0xFF, fwBytes[2].toInt() and 0xFF)
+    }
+    return "Unknown"
   }
 
   private fun readFirmwareVersion(): ByteArray {
