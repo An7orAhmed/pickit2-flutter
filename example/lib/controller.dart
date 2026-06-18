@@ -209,6 +209,65 @@ class HomeController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<Map<String, dynamic>?> loadFirmwareFile(String path) async {
+    connectionStatus = 'Loading firmware file...';
+    notifyListeners();
+
+    try {
+      String lowerPath = path.toLowerCase();
+      Map<String, dynamic>? result;
+      if (lowerPath.endsWith('.hex')) {
+        result = await _pickit2.loadHexFile(path);
+      } else if (lowerPath.endsWith('.bin')) {
+        result = await _pickit2.loadBinFile(path);
+      } else {
+        throw Exception('Unsupported file format. Use .hex or .bin');
+      }
+
+      if (result != null) {
+        firmwareName = path.split('/').last;
+        firmwareSize = _formatSize(result['loadedBytes'] as int? ?? 0);
+        firmwareType = (result['sourceType'] as String? ?? 'Unknown').toUpperCase();
+        connectionStatus = 'Firmware loaded: ${result['loadedBytes'] ?? 0} bytes';
+      } else {
+        connectionStatus = 'Failed to load firmware file';
+      }
+      notifyListeners();
+      return result;
+    } catch (e) {
+      if (!connected) {
+        connectionStatus = 'Connect PICkit2 first';
+      } else {
+        connectionStatus = 'Load failed: ${e.toString()}';
+      }
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<void> clearFirmware() async {
+    await _pickit2.clearLoadedImage();
+    firmwareName = 'N/A';
+    firmwareSize = '0 B';
+    firmwareType = 'None';
+    connectionStatus = 'Firmware cleared';
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>?> getLoadedFirmwareInfo() async {
+    return await _pickit2.getLoadedImageInfo();
+  }
+
+  String _formatSize(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+    }
+    if (bytes >= 1024) {
+      return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    }
+    return '$bytes B';
+  }
+
   Future<void> startProgramming() async {
     if (!connected || programming) return;
 

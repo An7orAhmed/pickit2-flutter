@@ -3,7 +3,10 @@ package com.an7or.pickit2_flutter
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import java.io.BufferedInputStream
+import java.io.BufferedReader
 import java.io.File
+import java.io.FileReader
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -19,6 +22,8 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
   private val chipCatalog = ChipCatalog()
   private val backgroundExecutor: ExecutorService = Executors.newSingleThreadExecutor()
   private val mainHandler = Handler(Looper.getMainLooper())
+
+  private val loadedImage = ProgramImage()
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     context = flutterPluginBinding.applicationContext
@@ -51,6 +56,30 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
       } catch (e: Exception) {
         result.error("SERIAL_ERROR", e.message, null)
       }
+
+    } else if (call.method == "loadHexFile") {
+      val path = call.argument<String>("path")
+      try {
+        result.success(loadHexFile(path))
+      } catch (e: Exception) {
+        result.error("HEX_LOAD_ERROR", e.message, null)
+      }
+
+    } else if (call.method == "loadBinFile") {
+      val path = call.argument<String>("path")
+      val baseAddress = call.argument<Int>("baseAddress") ?: 0
+      try {
+        result.success(loadBinFile(path, baseAddress))
+      } catch (e: Exception) {
+        result.error("BIN_LOAD_ERROR", e.message, null)
+      }
+
+    } else if (call.method == "clearLoadedImage") {
+      loadedImage.clear()
+      result.success(true)
+
+    } else if (call.method == "getLoadedImageInfo") {
+      result.success(loadedImage.summary())
 
     } else if (call.method == "loadChipData" || call.method == "loadChipDataFromDat") {
       runAsync(
@@ -138,6 +167,75 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
     usbDriver?.destroy()
     usbDriver = null
     backgroundExecutor.shutdownNow()
+  }
+
+  private fun loadHexFile(path: String?): Map<String, Any> {
+    if (path == null) {
+      throw IllegalArgumentException("Path is required")
+    }
+    val file = File(path)
+    if (!file.exists()) {
+      throw IllegalArgumentException("HEX file not found: $path")
+    }
+    loadedImage.clear()
+    loadedImage.setSource("hex", path)
+
+    var upperLinear = 0
+    var upperSegment = 0
+    FileReader(file).useLines { lines ->
+      for (line in lines) {
+        var trimmed = line.trim().uppercase()
+        if (trimmed.isEmpty()) continue
+        if (!trimmed.startsWith(":") || trimmed.length < 11) continue
+
+        val count = trimmed.substring(1, 3).toInt(16)
+        val offset = trimmed.substring(3, 7).toInt(16)
+        val recType = trimmed.substring(7, 9).toInt(16)
+        val dataStart = 9
+
+        when (recType) {
+          0x00 -> {
+            val base = (upperLinear shl 16) + (upperSegment shl 4) + offset
+            for (i in 0 until count) {
+              val b = trimmed.substring(dataStart + i * 2, dataStart + i * 2 + 2).toInt(16)
+              loadedImage.putByte(base + i, b)
+            }
+          }
+          0x01 -> return loadedImage.summary()
+          0x02 -> {
+            upperSegment = trimmed.substring(dataStart, dataStart + 4).toInt(16)
+            upperLinear = 0
+          }
+          0x04 -> {
+            upperLinear = trimmed.substring(dataStart, dataStart + 4).toInt(16)
+            upperSegment = 0
+          }
+        }
+      }
+    }
+    return loadedImage.summary()
+  }
+
+  private fun loadBinFile(path: String?, baseAddress: Int): Map<String, Any> {
+    if (path == null) {
+      throw IllegalArgumentException("Path is required")
+    }
+    val file = File(path)
+    if (!file.exists()) {
+      throw IllegalArgumentException("BIN file not found: $path")
+    }
+    loadedImage.clear()
+    loadedImage.setSource("bin", path)
+
+    BufferedInputStream(java.io.FileInputStream(file)).use { input ->
+      var offset = 0
+      var b: Int
+      while (input.read().also { b = it } >= 0) {
+        loadedImage.putByte(baseAddress + offset, b and 0xFF)
+        offset++
+      }
+    }
+    return loadedImage.summary()
   }
 
   private fun runAsync(

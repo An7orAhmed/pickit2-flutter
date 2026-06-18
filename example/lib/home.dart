@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
 import 'controller.dart';
@@ -150,6 +151,30 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _pickFirmwareFile(HomeController controller, BuildContext context) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['hex', 'bin'],
+      dialogTitle: 'Select firmware file (.hex or .bin)',
+    );
+    if (result == null || result.files.isEmpty) return;
+
+    final path = result.files.single.path;
+    if (path == null) return;
+
+    final loaded = await controller.loadFirmwareFile(path);
+    if (loaded != null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.connectionStatus)));
+    }
+  }
+
+  Future<void> _clearFirmware(HomeController controller, BuildContext context) async {
+    await controller.clearFirmware();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.connectionStatus)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -174,7 +199,7 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 20),
-              _buildFirmwareCard(controller),
+              _buildFirmwareCard(controller, context),
               const SizedBox(height: 16),
               _buildTargetCard(controller, context),
             ],
@@ -190,45 +215,45 @@ class HomeScreen extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(controller.deviceName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: controller.connected ? const Color(0xFF133422) : const Color(0xFF3E2A2A),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              controller.statusLabel,
-                              style: TextStyle(
-                                color: controller.connected ? const Color(0xFF8AF68F) : const Color(0xFFFF8A80),
-                                fontWeight: FontWeight.w600,
-                              ),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(controller.deviceName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: controller.connected ? const Color(0xFF133422) : const Color(0xFF3E2A2A),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            controller.statusLabel,
+                            style: TextStyle(
+                              color: controller.connected ? const Color(0xFF8AF68F) : const Color(0xFFFF8A80),
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(controller.serialNumber, style: const TextStyle(color: Colors.white70)),
-                    ],
-                  ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(controller.serialNumber, style: const TextStyle(color: Colors.white70)),
+                  ],
                 ),
-                Container(
-                  height: 56,
-                  width: 56,
-                  decoration: BoxDecoration(color: const Color(0xFF17263E), shape: BoxShape.circle),
-                  child: const Center(child: FaIcon(FontAwesomeIcons.microchip, color: Colors.lightBlueAccent)),
-                ),
-              ],
-            ),
+              ),
+              Container(
+                height: 56,
+                width: 56,
+                decoration: BoxDecoration(color: const Color(0xFF17263E), shape: BoxShape.circle),
+                child: const Center(child: FaIcon(FontAwesomeIcons.microchip, color: Colors.lightBlueAccent)),
+              ),
+            ],
+          ),
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
@@ -269,7 +294,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFirmwareCard(HomeController controller) {
+  Widget _buildFirmwareCard(HomeController controller, BuildContext context) {
     return Container(
       decoration: BoxDecoration(color: const Color(0xFF111B2D), borderRadius: BorderRadius.circular(22)),
       padding: const EdgeInsets.all(18),
@@ -286,13 +311,29 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(controller.firmwareName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                Text(
+                  controller.firmwareName,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 4),
                 Text('${controller.firmwareSize} · ${controller.firmwareType}', style: const TextStyle(color: Colors.white54)),
               ],
             ),
           ),
-          const FaIcon(FontAwesomeIcons.xmark, color: Colors.white38, size: 18),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => _pickFirmwareFile(controller, context),
+            icon: const FaIcon(FontAwesomeIcons.folderOpen, color: Colors.lightBlueAccent, size: 18),
+            tooltip: 'Load Firmware',
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            onPressed: controller.firmwareName != 'N/A' ? () => _clearFirmware(controller, context) : null,
+            icon: const FaIcon(FontAwesomeIcons.xmark, color: Colors.white38, size: 18),
+            tooltip: 'Clear',
+          ),
         ],
       ),
     );

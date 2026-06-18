@@ -27,6 +27,57 @@ class Pickit2Flutter {
     }
   }
 
+  /// Returns the connected PICkit 2 firmware version.
+  Future<String?> getFirmwareVersion() async {
+    try {
+      return await _channel.invokeMethod<String>('getFirmwareVersion');
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  /// Loads a HEX file and returns summary info.
+  Future<Map<String, dynamic>?> loadHexFile(String path) async {
+    try {
+      final result = await _channel.invokeMapMethod<String, dynamic>('loadHexFile', {'path': path});
+      return result == null ? null : Map<String, dynamic>.from(result);
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  /// Loads a BIN file and returns summary info.
+  Future<Map<String, dynamic>?> loadBinFile(String path, {int baseAddress = 0}) async {
+    try {
+      final result = await _channel.invokeMapMethod<String, dynamic>('loadBinFile', {
+        'path': path,
+        'baseAddress': baseAddress,
+      });
+      return result == null ? null : Map<String, dynamic>.from(result);
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  /// Clears the loaded program image.
+  Future<bool?> clearLoadedImage() async {
+    try {
+      return await _channel.invokeMethod<bool>('clearLoadedImage');
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  /// Gets info about the currently loaded program image.
+  Future<Map<String, dynamic>?> getLoadedImageInfo() async {
+    try {
+      final result = await _channel.invokeMapMethod<String, dynamic>('getLoadedImageInfo');
+      return result == null ? null : Map<String, dynamic>.from(result);
+    } on PlatformException {
+      return null;
+    }
+  }
+
   /// Loads pre-generated chip catalog assets.
   /// If paths are omitted, the bundled Android assets are used.
   Future<Map<String, dynamic>?> loadChipData({String? catalogPath, String? detectPath}) async {
@@ -69,15 +120,6 @@ class Pickit2Flutter {
     try {
       final result = await _channel.invokeMapMethod<String, dynamic>('autoDetectChip');
       return result == null ? null : Map<String, dynamic>.from(result);
-    } on PlatformException {
-      return null;
-    }
-  }
-
-  /// Returns the connected PICkit 2 firmware version.
-  Future<String?> getFirmwareVersion() async {
-    try {
-      return await _channel.invokeMethod<String>('getFirmwareVersion');
     } on PlatformException {
       return null;
     }
