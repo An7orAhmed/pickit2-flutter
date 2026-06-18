@@ -34,6 +34,12 @@ class PICkitUsbDriver(private val context: Context) {
   private val cmdSetVpp = 0xA1
   private val cmdExecuteScript = 0xA6
   private val cmdUploadData = 0xAA
+  private val cmdClrUploadBuffer = 0xA9
+  private val cmdRunScript = 0xA5
+  private val cmdUploadDataNoLen = 0xAC
+  private val cmdClrDownloadBuffer = 0xA7
+  private val cmdDownloadData = 0xA8
+  private val cmdEndOfBuffer = 0xAD
 
   private val scmdVddOn = 0xFF
   private val scmdVddOff = 0xFE

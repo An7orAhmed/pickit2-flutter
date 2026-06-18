@@ -315,16 +315,14 @@ class HomeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  controller.firmwareName == 'N/A' ? 'Import Firmware' : controller.firmwareName,
+                  controller.firmwareName == 'N/A' ? 'Import .hex/.bin' : controller.firmwareName,
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  controller.firmwareName == 'N/A'
-                      ? 'Tap the folder icon to load a .hex or .bin file'
-                      : '${controller.firmwareSize} · ${controller.firmwareType}',
+                  controller.firmwareName == 'N/A' ? 'Load a firmware file' : '${controller.firmwareSize} · ${controller.firmwareType}',
                   style: const TextStyle(color: Colors.white54),
                 ),
               ],
@@ -379,31 +377,36 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: controller.connected ? () => controller.autoDetectChip() : null,
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.lightBlueAccent),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    icon: const FaIcon(FontAwesomeIcons.wandMagicSparkles, size: 12, color: Colors.lightBlueAccent),
-                    label: const Text('Auto Detect', style: TextStyle(color: Colors.lightBlueAccent)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: controller.connected ? () => controller.autoDetectChip() : null,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.lightBlueAccent),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: () => _showDeviceSelectorSheet(context, controller),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                    child: const Text('Change'),
+                  icon: const FaIcon(FontAwesomeIcons.wandMagicSparkles, size: 12, color: Colors.lightBlueAccent),
+                  label: const Text('Auto Detect', style: TextStyle(color: Colors.lightBlueAccent)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => _showDeviceSelectorSheet(context, controller),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   ),
-                ],
+                  child: const Text('Change'),
+                ),
               ),
             ],
           ),
