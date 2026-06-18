@@ -130,6 +130,13 @@ class HomeController extends ChangeNotifier {
     final detectedId = (detected?['deviceId'] as String?)?.trim();
 
     if (!found || detectedModel == null || detectedModel.isEmpty) {
+      targetDevice = 'Unrecognised';
+      deviceFamily = 'Unknown';
+      flashSize = 'N/A';
+      ramSize = 'N/A';
+      eepromSize = 'N/A';
+      deviceId = 'N/A';
+      selectedChipFamily = allFamiliesOption;
       connectionStatus = 'Chip auto-detect failed';
       notifyListeners();
       return;
