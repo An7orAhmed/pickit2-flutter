@@ -316,29 +316,33 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              TextButton(
-                onPressed: () => _showDeviceSelectorSheet(context, controller),
-                style: TextButton.styleFrom(
-                  side: const BorderSide(color: Colors.blueAccent),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text('Change', style: TextStyle(color: Colors.blueAccent)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: controller.connected ? () => controller.autoDetectChip() : null,
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.lightBlueAccent),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    icon: const FaIcon(FontAwesomeIcons.wandMagicSparkles, size: 12, color: Colors.lightBlueAccent),
+                    label: const Text('Auto Detect', style: TextStyle(color: Colors.lightBlueAccent)),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () => _showDeviceSelectorSheet(context, controller),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                    child: const Text('Change'),
+                  ),
+                ],
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: controller.connected ? () => controller.autoDetectChip() : null,
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.lightBlueAccent),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              icon: const FaIcon(FontAwesomeIcons.wandMagicSparkles, size: 14, color: Colors.lightBlueAccent),
-              label: const Text('Auto Detect Chip', style: TextStyle(color: Colors.lightBlueAccent)),
-            ),
           ),
           const SizedBox(height: 18),
           Row(
