@@ -66,7 +66,7 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     Text(controller.deviceName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
-                    Text('S.No: ${controller.serialNumber}', style: const TextStyle(color: Colors.white70)),
+                    Text(controller.serialNumber, style: const TextStyle(color: Colors.white70)),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

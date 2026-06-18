@@ -51,6 +51,9 @@ class PICkitUsbDriver(private val context: Context) {
           device?.let {
             if (it.vendorId == PICKIT2_VID && it.productId == PICKIT2_PID) {
               Log.d(TAG, "PICkit 2 Detached!")
+              if (pickitDevice?.deviceId == it.deviceId) {
+                pickitDevice = null
+              }
               disconnect() // Clean up safely
             }
           }
@@ -81,6 +84,8 @@ class PICkitUsbDriver(private val context: Context) {
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       context.registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+      context.registerReceiver(usbReceiver, filter)
     }
 
     // As soon as the app starts, check if it's ALREADY plugged in
@@ -101,6 +106,9 @@ class PICkitUsbDriver(private val context: Context) {
   }
 
   private fun requestPermission() {
+    if (pickitDevice == null) {
+      pickitDevice = findPickitDevice()
+    }
     pickitDevice?.let { device ->
       if (!usbManager.hasPermission(device)) {
         val pi = PendingIntent.getBroadcast(
@@ -115,7 +123,12 @@ class PICkitUsbDriver(private val context: Context) {
   fun connect(callback: UsbCallback) {
     this.currentCallback = callback
 
-    val device = pickitDevice ?: return replyError("PICkit 2 not found. Is it plugged in?")
+    val device = findPickitDevice() ?: return replyError("PICkit 2 not found. Is it plugged in?")
+    pickitDevice = device
+
+    if (connection != null && endpointIn != null && endpointOut != null) {
+      return replySuccess()
+    }
 
     if (!usbManager.hasPermission(device)) {
       return replyError("USB Permission not granted yet. Please accept the popup.")
@@ -152,13 +165,41 @@ class PICkitUsbDriver(private val context: Context) {
 
   fun disconnect() {
     connection?.let {
-      it.releaseInterface(usbInterface)
+      usbInterface?.let { iface ->
+        it.releaseInterface(iface)
+      }
       it.close()
       Log.d(TAG, "USB connection closed.")
     }
     connection = null
     endpointIn = null
     endpointOut = null
+    usbInterface = null
+  }
+
+  fun getSerialNumber(): String {
+    val device = pickitDevice ?: findPickitDevice()
+      ?: throw IllegalStateException("PICkit 2 not found. Is it plugged in?")
+
+    if (connection == null) {
+      throw IllegalStateException("PICkit 2 is not connected.")
+    }
+
+    if (!usbManager.hasPermission(device)) {
+      throw SecurityException("USB permission not granted.")
+    }
+
+    val serialFromDevice = runCatching { device.serialNumber }.getOrNull()
+    if (!serialFromDevice.isNullOrBlank()) {
+      return serialFromDevice
+    }
+
+    val serialFromConnection = runCatching { connection?.serial }.getOrNull()
+    if (!serialFromConnection.isNullOrBlank()) {
+      return serialFromConnection
+    }
+
+    throw IllegalStateException("Device serial number is unavailable.")
   }
 
   fun destroy() {
@@ -178,5 +219,11 @@ class PICkitUsbDriver(private val context: Context) {
   private fun replyError(error: String) {
     currentCallback?.onConnectionFailed(error)
     currentCallback = null
+  }
+
+  private fun findPickitDevice(): UsbDevice? {
+    return usbManager.deviceList.values.firstOrNull {
+      it.vendorId == PICKIT2_VID && it.productId == PICKIT2_PID
+    }
   }
 }

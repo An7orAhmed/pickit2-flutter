@@ -37,6 +37,13 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
       usbDriver?.disconnect()
       result.success("Disconnected")
 
+    } else if (call.method == "getSerialNumber") {
+      try {
+        result.success(usbDriver?.getSerialNumber())
+      } catch (e: Exception) {
+        result.error("SERIAL_ERROR", e.message, null)
+      }
+
     } else {
       result.notImplemented()
     }

@@ -15,7 +15,7 @@ class HomeController extends ChangeNotifier {
 
   String deviceName = 'PICkit2';
   String targetDevice = 'PIC18F4550';
-  String serialNumber = 'PK2-123456';
+  String serialNumber = 'N/A';
   String deviceFamily = 'PIC18 Family';
   String flashSize = '32 KB';
   String ramSize = '2 KB';
@@ -31,11 +31,18 @@ class HomeController extends ChangeNotifier {
 
     try {
       final result = await _pickit2.connect();
-      connected = result.toLowerCase().contains('connected') || result.toLowerCase().contains('ready');
+      connected = !result.toLowerCase().startsWith('connection failed');
       connectionStatus = result;
+      if (connected) {
+        final serial = await _pickit2.getSerialNumber();
+        serialNumber = (serial != null && serial.trim().isNotEmpty) ? serial : 'Unavailable';
+      } else {
+        serialNumber = 'N/A';
+      }
     } catch (error) {
       connectionStatus = 'Connection failed';
       connected = false;
+      serialNumber = 'N/A';
     }
 
     notifyListeners();
@@ -49,9 +56,11 @@ class HomeController extends ChangeNotifier {
       await _pickit2.disconnect();
       connected = false;
       connectionStatus = "Disconnected";
+      serialNumber = 'N/A';
     } catch (error) {
       connectionStatus = 'Disconnect failed';
       connected = false;
+      serialNumber = 'N/A';
     }
 
     notifyListeners();

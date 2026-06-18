@@ -17,4 +17,13 @@ class Pickit2Flutter {
   Future<void> disconnect() async {
     await _channel.invokeMethod('disconnect');
   }
+
+  /// Returns the connected PICkit 2 serial number.
+  Future<String?> getSerialNumber() async {
+    try {
+      return await _channel.invokeMethod<String>('getSerialNumber');
+    } on PlatformException {
+      return null;
+    }
+  }
 }
