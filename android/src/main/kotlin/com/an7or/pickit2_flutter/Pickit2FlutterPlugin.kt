@@ -1,7 +1,11 @@
 package com.an7or.pickit2_flutter
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import java.io.File
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -13,6 +17,8 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
   private lateinit var context: Context
   private var usbDriver: PICkitUsbDriver? = null
   private val chipCatalog = ChipCatalog()
+  private val backgroundExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+  private val mainHandler = Handler(Looper.getMainLooper())
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     context = flutterPluginBinding.applicationContext
@@ -46,29 +52,34 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
         result.error("SERIAL_ERROR", e.message, null)
       }
 
-    } else if (call.method == "loadChipDataFromDat") {
-      try {
-        val filePath = call.argument<String>("filePath")
-        val datBytes = if (filePath.isNullOrBlank()) {
-          context.assets.open("PK2DeviceFile.dat").use { it.readBytes() }
+    } else if (call.method == "loadChipData" || call.method == "loadChipDataFromDat") {
+      runAsync(
+        result = result,
+        errorCode = "CHIP_DATA_ERROR",
+      ) {
+        val catalogPath = call.argument<String>("catalogPath")
+        val detectPath = call.argument<String>("detectPath")
+        val catalogBytes = if (catalogPath.isNullOrBlank()) {
+          context.assets.open("chip_catalog.csv").use { it.readBytes() }
         } else {
-          File(filePath).readBytes()
+          File(catalogPath).readBytes()
+        }
+        val detectBytes = if (detectPath.isNullOrBlank()) {
+          context.assets.open("chip_detect.json").use { it.readBytes() }
+        } else {
+          File(detectPath).readBytes()
         }
 
-        val loadedModelCount = chipCatalog.loadFromDat(datBytes)
+        val loadedModelCount = chipCatalog.loadPrebuilt(catalogBytes, detectBytes)
         if (loadedModelCount <= 0) {
-          result.error("CHIP_DATA_ERROR", "No chip models parsed from .dat file", null)
-        } else {
-          result.success(
-            mapOf(
-              "loaded" to true,
-              "familyCount" to chipCatalog.families().size,
-              "modelCount" to loadedModelCount,
-            ),
-          )
+          throw IllegalStateException("No chip models parsed from generated assets")
         }
-      } catch (e: Exception) {
-        result.error("CHIP_DATA_ERROR", e.message, null)
+
+        mapOf(
+          "loaded" to true,
+          "familyCount" to chipCatalog.families().size,
+          "modelCount" to loadedModelCount,
+        )
       }
 
     } else if (call.method == "getChipCatalog") {
@@ -101,10 +112,12 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
       if (!chipCatalog.isLoaded()) {
         result.error("CHIP_DATA_NOT_LOADED", "Load chip data first using loadChipDataFromDat", null)
       } else {
-        try {
-          result.success(usbDriver?.autoDetectTarget(chipCatalog))
-        } catch (e: Exception) {
-          result.error("AUTO_DETECT_ERROR", e.message, null)
+        runAsync(
+          result = result,
+          errorCode = "AUTO_DETECT_ERROR",
+        ) {
+          usbDriver?.autoDetectTarget(chipCatalog)
+            ?: throw IllegalStateException("USB driver is unavailable")
         }
       }
 
@@ -117,5 +130,21 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
     channel.setMethodCallHandler(null)
     usbDriver?.destroy()
     usbDriver = null
+    backgroundExecutor.shutdownNow()
+  }
+
+  private fun runAsync(
+    result: Result,
+    errorCode: String,
+    task: () -> Any,
+  ) {
+    backgroundExecutor.execute {
+      try {
+        val value = task()
+        mainHandler.post { result.success(value) }
+      } catch (e: Exception) {
+        mainHandler.post { result.error(errorCode, e.message, null) }
+      }
+    }
   }
 }

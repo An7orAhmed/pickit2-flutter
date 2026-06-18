@@ -3,7 +3,6 @@ import 'package:pickit2_flutter/pickit2_flutter.dart';
 
 class HomeController extends ChangeNotifier {
   final Pickit2Flutter _pickit2 = Pickit2Flutter();
-  static const String _defaultPk2CmdDatPath = '/Users/an7or/MyWork/pk2cmd/PK2DeviceFile.dat';
   static const String allFamiliesOption = 'All';
   final Map<String, List<Map<String, String>>> chipCatalog = <String, List<Map<String, String>>>{};
 
@@ -45,7 +44,7 @@ class HomeController extends ChangeNotifier {
     return chipCatalog[family] ?? const <Map<String, String>>[];
   }
 
-  Future<bool> ensureChipCatalogLoaded({String? datFilePath}) async {
+  Future<bool> ensureChipCatalogLoaded() async {
     if (chipCatalogLoaded && chipCatalog.isNotEmpty) {
       return true;
     }
@@ -53,8 +52,7 @@ class HomeController extends ChangeNotifier {
     connectionStatus = 'Loading chip data...';
     notifyListeners();
 
-    final preferredPath = (datFilePath == null || datFilePath.trim().isEmpty) ? _defaultPk2CmdDatPath : datFilePath;
-    final loadResult = await _pickit2.loadChipDataFromDat(filePath: preferredPath) ?? await _pickit2.loadChipDataFromDat();
+    final loadResult = await _pickit2.loadChipData();
     if (loadResult == null || loadResult['loaded'] != true) {
       connectionStatus = 'Failed to load chip data';
       notifyListeners();

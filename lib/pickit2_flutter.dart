@@ -27,17 +27,24 @@ class Pickit2Flutter {
     }
   }
 
-  /// Loads chip catalog data from PK2DeviceFile.dat.
-  /// If [filePath] is null, plugin loads the bundled Android asset.
-  Future<Map<String, dynamic>?> loadChipDataFromDat({String? filePath}) async {
+  /// Loads pre-generated chip catalog assets.
+  /// If paths are omitted, the bundled Android assets are used.
+  Future<Map<String, dynamic>?> loadChipData({String? catalogPath, String? detectPath}) async {
     try {
-      final result = await _channel.invokeMapMethod<String, dynamic>('loadChipDataFromDat', {
-        if (filePath != null && filePath.trim().isNotEmpty) 'filePath': filePath,
+      final result = await _channel.invokeMapMethod<String, dynamic>('loadChipData', {
+        if (catalogPath != null && catalogPath.trim().isNotEmpty) 'catalogPath': catalogPath,
+        if (detectPath != null && detectPath.trim().isNotEmpty) 'detectPath': detectPath,
       });
       return result == null ? null : Map<String, dynamic>.from(result);
     } on PlatformException {
       return null;
     }
+  }
+
+  /// Legacy alias kept so older callers continue to work after the runtime
+  /// `.dat` parser was removed.
+  Future<Map<String, dynamic>?> loadChipDataFromDat({String? filePath}) async {
+    return loadChipData();
   }
 
   /// Returns full chip catalog grouped by family.

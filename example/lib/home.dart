@@ -167,10 +167,10 @@ class HomeScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildActionButton(FontAwesomeIcons.download, 'Program'),
-                  _buildActionButton(FontAwesomeIcons.shield, 'Verify'),
-                  _buildActionButton(FontAwesomeIcons.trash, 'Erase'),
-                  _buildActionButton(FontAwesomeIcons.file, 'Read'),
+                  _buildActionButton(FontAwesomeIcons.download, 'Program', enabled: controller.connected),
+                  _buildActionButton(FontAwesomeIcons.shield, 'Verify', enabled: controller.connected),
+                  _buildActionButton(FontAwesomeIcons.trash, 'Erase', enabled: controller.connected),
+                  _buildActionButton(FontAwesomeIcons.file, 'Read', enabled: controller.connected),
                 ],
               ),
               const SizedBox(height: 20),
@@ -241,19 +241,22 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label) {
+  Widget _buildActionButton(IconData icon, String label, {required bool enabled}) {
     return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(color: const Color(0xFF111B2D), borderRadius: BorderRadius.circular(20)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FaIcon(icon, color: Colors.blueAccent, size: 20),
-            const SizedBox(height: 10),
-            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-          ],
+      child: Opacity(
+        opacity: enabled ? 1 : 0.45,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(color: const Color(0xFF111B2D), borderRadius: BorderRadius.circular(20)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FaIcon(icon, color: enabled ? Colors.blueAccent : Colors.white38, size: 20),
+              const SizedBox(height: 10),
+              Text(label, style: TextStyle(color: enabled ? Colors.white70 : Colors.white38, fontSize: 13)),
+            ],
+          ),
         ),
       ),
     );
@@ -327,7 +330,7 @@ class HomeScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: () => controller.autoDetectChip(),
+              onPressed: controller.connected ? () => controller.autoDetectChip() : null,
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Colors.lightBlueAccent),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
