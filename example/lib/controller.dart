@@ -176,6 +176,8 @@ class HomeController extends ChangeNotifier {
       if (connected) {
         final serial = await _pickit2.getSerialNumber();
         serialNumber = (serial != null && serial.trim().isNotEmpty) ? serial : 'Unavailable';
+        final fwVersion = await _pickit2.getFirmwareVersion();
+        programmerFirmware = (fwVersion != null && fwVersion.trim().isNotEmpty) ? fwVersion : 'N/A';
       } else {
         serialNumber = 'N/A';
       }
@@ -197,6 +199,7 @@ class HomeController extends ChangeNotifier {
       connected = false;
       connectionStatus = "Disconnected";
       serialNumber = 'N/A';
+      programmerFirmware = 'N/A';
     } catch (error) {
       connectionStatus = 'Disconnect failed';
       connected = false;

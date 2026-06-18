@@ -73,4 +73,13 @@ class Pickit2Flutter {
       return null;
     }
   }
+
+  /// Returns the connected PICkit 2 firmware version.
+  Future<String?> getFirmwareVersion() async {
+    try {
+      return await _channel.invokeMethod<String>('getFirmwareVersion');
+    } on PlatformException {
+      return null;
+    }
+  }
 }

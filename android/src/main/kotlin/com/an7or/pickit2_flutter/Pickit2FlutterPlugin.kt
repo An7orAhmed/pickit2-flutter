@@ -121,6 +121,13 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
         }
       }
 
+    } else if (call.method == "getFirmwareVersion") {
+      try {
+        result.success(usbDriver?.getFirmwareVersion())
+      } catch (e: Exception) {
+        result.error("FW_VERSION_ERROR", e.message, null)
+      }
+
     } else {
       result.notImplemented()
     }

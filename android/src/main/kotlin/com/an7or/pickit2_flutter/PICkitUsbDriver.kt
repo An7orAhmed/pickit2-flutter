@@ -219,6 +219,32 @@ class PICkitUsbDriver(private val context: Context) {
     throw IllegalStateException("Device serial number is unavailable.")
   }
 
+  fun getFirmwareVersion(): String {
+    if (connection == null || endpointIn == null || endpointOut == null) {
+      throw IllegalStateException("PICkit 2 is not connected.")
+    }
+
+    val fwBytes = readFirmwareVersion()
+    // Response format: Major, Minor, Dot at bytes 1, 2, 3 (HID report has 1-byte ID at position 0)
+    // Bootloader detection: if byte[1] == 0x76 ('v'), read from bytes 7, 8
+    return if (fwBytes[1].toInt() == 0x76 && fwBytes.size >= 9 && fwBytes[6].toInt() == 0x42 /* 'B' */) {
+      // Bootloader mode
+      val major = fwBytes[7].toInt() and 0xFF
+      val minor = fwBytes[8].toInt() and 0xFF
+      "$major.$minor"
+    } else {
+      // Normal mode - format with 2-digit padding for minor and dot
+      String.format("%d.%02d.%02d", fwBytes[1].toInt() and 0xFF, fwBytes[2].toInt() and 0xFF, fwBytes[3].toInt() and 0xFF)
+    }
+  }
+
+  private fun readFirmwareVersion(): ByteArray {
+    // PICkit 2 firmware version command: 0x76
+    val command = byteArrayOf(0x76.toByte())
+    write64(command)
+    return read64()
+  }
+
   fun autoDetectTarget(catalog: ChipCatalog): Map<String, Any> {
     if (connection == null || endpointIn == null || endpointOut == null) {
       throw IllegalStateException("PICkit 2 is not connected.")
