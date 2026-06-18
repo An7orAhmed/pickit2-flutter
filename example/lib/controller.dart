@@ -37,10 +37,7 @@ class HomeController extends ChangeNotifier {
       final allModels = <Map<String, String>>[];
       for (final entry in chipCatalog.entries) {
         for (final row in entry.value) {
-          allModels.add(<String, String>{
-            ...row,
-            'family': entry.key,
-          });
+          allModels.add(<String, String>{...row, 'family': entry.key});
         }
       }
       return allModels;
@@ -57,8 +54,7 @@ class HomeController extends ChangeNotifier {
     notifyListeners();
 
     final preferredPath = (datFilePath == null || datFilePath.trim().isEmpty) ? _defaultPk2CmdDatPath : datFilePath;
-    final loadResult = await _pickit2.loadChipDataFromDat(filePath: preferredPath) ??
-      await _pickit2.loadChipDataFromDat();
+    final loadResult = await _pickit2.loadChipDataFromDat(filePath: preferredPath) ?? await _pickit2.loadChipDataFromDat();
     if (loadResult == null || loadResult['loaded'] != true) {
       connectionStatus = 'Failed to load chip data';
       notifyListeners();
@@ -77,10 +73,7 @@ class HomeController extends ChangeNotifier {
         selectedChipFamily = preferredFamily;
 
         final familyModels = getModelsByFamily(preferredFamily);
-        final currentModel = familyModels.firstWhere(
-          (row) => row['model'] == targetDevice,
-          orElse: () => familyModels.first,
-        );
+        final currentModel = familyModels.firstWhere((row) => row['model'] == targetDevice, orElse: () => familyModels.first);
         selectChipByFamilyAndModel(preferredFamily, currentModel);
         connectionStatus = 'Chip data loaded';
       } else {
@@ -144,9 +137,7 @@ class HomeController extends ChangeNotifier {
       return;
     }
 
-    final family = (detectedFamily != null && detectedFamily.isNotEmpty)
-        ? detectedFamily
-        : _findFamilyByModel(detectedModel);
+    final family = (detectedFamily != null && detectedFamily.isNotEmpty) ? detectedFamily : _findFamilyByModel(detectedModel);
     final familyModels = getModelsByFamily(family);
     final matched = familyModels.firstWhere(
       (row) => (row['model'] ?? '').toUpperCase() == detectedModel.toUpperCase(),

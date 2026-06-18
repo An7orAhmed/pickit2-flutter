@@ -23,9 +23,7 @@ class HomeScreen extends StatelessWidget {
     if (!context.mounted) return;
 
     if (!loaded) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(controller.connectionStatus)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.connectionStatus)));
       return;
     }
 
@@ -33,9 +31,7 @@ class HomeScreen extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF111B2D),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (sheetContext) {
         final sheetHeight = MediaQuery.of(sheetContext).size.height * 0.7;
         String selectedFamily = controller.selectedChipFamily;
@@ -59,10 +55,7 @@ class HomeScreen extends StatelessWidget {
                         child: Container(
                           width: 42,
                           height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -71,12 +64,12 @@ class HomeScreen extends StatelessWidget {
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
                       ),
                       const SizedBox(height: 6),
-                      const Text(
-                        'Step 1: Family  Step 2: Model',
-                        style: TextStyle(color: Colors.white54),
-                      ),
+                      const Text('Step 1: Family  Step 2: Model', style: TextStyle(color: Colors.white54)),
                       const SizedBox(height: 14),
-                      const Text('Family', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                      const Text(
+                        'Family',
+                        style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
+                      ),
                       const SizedBox(height: 8),
                       SizedBox(
                         height: 40,
@@ -92,10 +85,7 @@ class HomeScreen extends StatelessWidget {
                               selected: selected,
                               selectedColor: const Color(0xFF1A3656),
                               backgroundColor: const Color(0xFF0E182A),
-                              labelStyle: TextStyle(
-                                color: selected ? Colors.lightBlueAccent : Colors.white70,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              labelStyle: TextStyle(color: selected ? Colors.lightBlueAccent : Colors.white70, fontWeight: FontWeight.w600),
                               onSelected: (_) {
                                 setModalState(() {
                                   selectedFamily = family;
@@ -107,7 +97,10 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      const Text('Model', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                      const Text(
+                        'Model',
+                        style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
+                      ),
                       const SizedBox(height: 8),
                       Flexible(
                         child: ListView.separated(
@@ -133,10 +126,7 @@ class HomeScreen extends StatelessWidget {
                                   color: selected ? Colors.lightBlueAccent : Colors.white60,
                                 ),
                                 title: Text(modelName, style: const TextStyle(color: Colors.white)),
-                                subtitle: Text(
-                                  subtitle,
-                                  style: const TextStyle(color: Colors.white54),
-                                ),
+                                subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54)),
                                 trailing: selected
                                     ? const Icon(Icons.check_circle, color: Colors.lightBlueAccent)
                                     : const Icon(Icons.chevron_right, color: Colors.white38),
