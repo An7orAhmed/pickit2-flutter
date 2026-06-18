@@ -190,38 +190,45 @@ class HomeScreen extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(controller.deviceName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(controller.serialNumber, style: const TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: controller.connected ? const Color(0xFF133422) : const Color(0xFF3E3E46),
-                        borderRadius: BorderRadius.circular(12),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(controller.deviceName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: controller.connected ? const Color(0xFF133422) : const Color(0xFF3E2A2A),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              controller.statusLabel,
+                              style: TextStyle(
+                                color: controller.connected ? const Color(0xFF8AF68F) : const Color(0xFFFF8A80),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      child: Text(
-                        controller.statusLabel,
-                        style: const TextStyle(color: Color(0xFF8AF68F), fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(controller.serialNumber, style: const TextStyle(color: Colors.white70)),
+                    ],
+                  ),
                 ),
-              ),
-              Container(
-                height: 56,
-                width: 56,
-                decoration: BoxDecoration(color: const Color(0xFF17263E), shape: BoxShape.circle),
-                child: const Center(child: FaIcon(FontAwesomeIcons.microchip, color: Colors.lightBlueAccent)),
-              ),
-            ],
-          ),
+                Container(
+                  height: 56,
+                  width: 56,
+                  decoration: BoxDecoration(color: const Color(0xFF17263E), shape: BoxShape.circle),
+                  child: const Center(child: FaIcon(FontAwesomeIcons.microchip, color: Colors.lightBlueAccent)),
+                ),
+              ],
+            ),
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
