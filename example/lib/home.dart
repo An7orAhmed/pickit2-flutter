@@ -18,6 +18,148 @@ class HomeScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _showDeviceSelectorSheet(BuildContext context, HomeController controller) async {
+    final loaded = await controller.ensureChipCatalogLoaded();
+    if (!context.mounted) return;
+
+    if (!loaded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(controller.connectionStatus)),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF111B2D),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        final sheetHeight = MediaQuery.of(sheetContext).size.height * 0.7;
+        String selectedFamily = controller.selectedChipFamily;
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final families = controller.chipFamilies;
+            final models = controller.getModelsByFamily(selectedFamily);
+
+            return SizedBox(
+              height: sheetHeight,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Select Target Chip',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Step 1: Family  Step 2: Model',
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text('Family', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 40,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: families.length,
+                          separatorBuilder: (context, index) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final family = families[index];
+                            final selected = family == selectedFamily;
+                            return ChoiceChip(
+                              label: Text(family),
+                              selected: selected,
+                              selectedColor: const Color(0xFF1A3656),
+                              backgroundColor: const Color(0xFF0E182A),
+                              labelStyle: TextStyle(
+                                color: selected ? Colors.lightBlueAccent : Colors.white70,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              onSelected: (_) {
+                                setModalState(() {
+                                  selectedFamily = family;
+                                });
+                                controller.selectFamily(family);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text('Model', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: models.length,
+                          separatorBuilder: (context, index) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final model = models[index];
+                            final modelName = model['model'] ?? 'Unknown';
+                            final selected = modelName == controller.targetDevice;
+                            final modelFamily = model['family'];
+                            final subtitle = (modelFamily != null && selectedFamily == HomeController.allFamiliesOption)
+                                ? '$modelFamily  ·  ID: ${model['deviceId'] ?? 'N/A'}'
+                                : 'ID: ${model['deviceId'] ?? 'N/A'}';
+                            return Material(
+                              color: selected ? const Color(0xFF1A3656) : const Color(0xFF0E182A),
+                              borderRadius: BorderRadius.circular(14),
+                              child: ListTile(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                leading: FaIcon(
+                                  FontAwesomeIcons.microchip,
+                                  size: 16,
+                                  color: selected ? Colors.lightBlueAccent : Colors.white60,
+                                ),
+                                title: Text(modelName, style: const TextStyle(color: Colors.white)),
+                                subtitle: Text(
+                                  subtitle,
+                                  style: const TextStyle(color: Colors.white54),
+                                ),
+                                trailing: selected
+                                    ? const Icon(Icons.check_circle, color: Colors.lightBlueAccent)
+                                    : const Icon(Icons.chevron_right, color: Colors.white38),
+                                onTap: () {
+                                  controller.selectChipByFamilyAndModel(selectedFamily, model);
+                                  Navigator.of(sheetContext).pop();
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -44,7 +186,7 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 20),
               _buildFirmwareCard(controller),
               const SizedBox(height: 16),
-              _buildTargetCard(controller),
+              _buildTargetCard(controller, context),
             ],
           );
         },
@@ -156,7 +298,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTargetCard(HomeController controller) {
+  Widget _buildTargetCard(HomeController controller, BuildContext context) {
     return Container(
       decoration: BoxDecoration(color: const Color(0xFF111B2D), borderRadius: BorderRadius.circular(22)),
       padding: const EdgeInsets.all(18),
@@ -182,7 +324,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () => _showDeviceSelectorSheet(context, controller),
                 style: TextButton.styleFrom(
                   side: const BorderSide(color: Colors.blueAccent),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -190,6 +332,20 @@ class HomeScreen extends StatelessWidget {
                 child: const Text('Change', style: TextStyle(color: Colors.blueAccent)),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => controller.autoDetectChip(),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.lightBlueAccent),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              icon: const FaIcon(FontAwesomeIcons.wandMagicSparkles, size: 14, color: Colors.lightBlueAccent),
+              label: const Text('Auto Detect Chip', style: TextStyle(color: Colors.lightBlueAccent)),
+            ),
           ),
           const SizedBox(height: 18),
           Row(

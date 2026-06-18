@@ -26,4 +26,44 @@ class Pickit2Flutter {
       return null;
     }
   }
+
+  /// Loads chip catalog data from PK2DeviceFile.dat.
+  /// If [filePath] is null, plugin loads the bundled Android asset.
+  Future<Map<String, dynamic>?> loadChipDataFromDat({String? filePath}) async {
+    try {
+      final result = await _channel.invokeMapMethod<String, dynamic>('loadChipDataFromDat', {
+        if (filePath != null && filePath.trim().isNotEmpty) 'filePath': filePath,
+      });
+      return result == null ? null : Map<String, dynamic>.from(result);
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  /// Returns full chip catalog grouped by family.
+  Future<Map<String, List<Map<String, String>>>> getChipCatalog() async {
+    final raw = await _channel.invokeMethod<dynamic>('getChipCatalog');
+    final map = (raw as Map<dynamic, dynamic>?) ?? const <dynamic, dynamic>{};
+    final result = <String, List<Map<String, String>>>{};
+
+    map.forEach((key, value) {
+      final family = key.toString();
+      final rows = (value as List<dynamic>? ?? const <dynamic>[])
+          .map((entry) => Map<String, String>.from((entry as Map).map((k, v) => MapEntry(k.toString(), v.toString()))))
+          .toList();
+      result[family] = rows;
+    });
+
+    return result;
+  }
+
+  /// Performs hardware-backed target auto-detect using loaded device file scripts.
+  Future<Map<String, dynamic>?> autoDetectChip() async {
+    try {
+      final result = await _channel.invokeMapMethod<String, dynamic>('autoDetectChip');
+      return result == null ? null : Map<String, dynamic>.from(result);
+    } on PlatformException {
+      return null;
+    }
+  }
 }
