@@ -28,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       await controller.disconnect();
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.connectionStatus)));
+      _showSnack(controller.connectionStatus);
     }
   }
 
@@ -37,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     if (!mounted) return;
 
     if (!loaded) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.connectionStatus)));
+      _showSnack(controller.connectionStatus);
       return;
     }
 
@@ -178,23 +178,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final loaded = await controller.loadFirmwareFile(path);
     if (loaded != null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.connectionStatus)));
+      _showSnack(controller.connectionStatus);
     }
   }
 
   Future<void> _clearFirmware(HomeController controller) async {
     await controller.clearFirmware();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.connectionStatus)));
+    _showSnack(controller.connectionStatus);
   }
 
   Future<void> _handleErase(HomeController controller) async {
     final success = await controller.eraseChip();
     if (!mounted) return;
     if (success == true) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chip erased successfully')));
+      _showSnack('Chip erased successfully');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.connectionStatus)));
+      _showSnack(controller.connectionStatus);
     }
   }
 
@@ -202,9 +202,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final result = await controller.readChip();
     if (!mounted) return;
     if (result?["success"] == true) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chip read successfully')));
+      _showSnack('Chip read successfully');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.connectionStatus)));
+      _showSnack(controller.connectionStatus);
     }
   }
 
@@ -220,16 +220,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     final allData = [...controller.readProgramMemory, ...controller.readEepromMemory, ...controller.readConfigMemory];
     if (allData.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No data to save')));
+      _showSnack('No data to save', kind: _SnackKind.warning);
       return;
     }
 
     final success = await controller.saveHexFile(result, allData, 1, 2);
     if (!mounted) return;
     if (success == true) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved to $result')));
+      _showSnack('Saved to $result');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(controller.connectionStatus)));
+      _showSnack(controller.connectionStatus);
     }
   }
 
@@ -237,6 +237,96 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // ── Snackbar helpers ─────────────────────────────────────────────────────
+
+  _SnackKind _resolveSnackKind(String message) {
+    final m = message.toLowerCase();
+    if (m.contains('success') || m.contains('complete') || m.contains('connected') ||
+        m.contains('loaded') || m.contains('saved') || m.contains('erased') ||
+        m.contains('detected') || m.contains('selected') || m.contains('cleared') ||
+        m.contains('read:') || m.contains('read successfully')) {
+      return _SnackKind.success;
+    }
+    if (m.contains('fail') || m.contains('error') || m.contains('unavailable') ||
+        m.contains('denied') || m.contains('refused')) {
+      return _SnackKind.error;
+    }
+    if (m.contains('not implemented') || m.contains('connect pickit') ||
+        m.contains('no data') || m.contains('unrecognised') || m.contains('first')) {
+      return _SnackKind.warning;
+    }
+    return _SnackKind.info;
+  }
+
+  void _showSnack(String message, {_SnackKind? kind}) {
+    if (!mounted) return;
+    final resolved = kind ?? _resolveSnackKind(message);
+
+    final Color bgColor;
+    final Color accentColor;
+    final IconData icon;
+
+    switch (resolved) {
+      case _SnackKind.success:
+        bgColor = const Color(0xFF0A2E1A);
+        accentColor = const Color(0xFF4ADE80);
+        icon = Icons.check_circle_rounded;
+      case _SnackKind.error:
+        bgColor = const Color(0xFF2E0A0A);
+        accentColor = const Color(0xFFFF6B6B);
+        icon = Icons.cancel_rounded;
+      case _SnackKind.warning:
+        bgColor = const Color(0xFF2E200A);
+        accentColor = const Color(0xFFFFBB33);
+        icon = Icons.warning_amber_rounded;
+      case _SnackKind.info:
+        bgColor = const Color(0xFF0A1B2E);
+        accentColor = const Color(0xFF60BFFF);
+        icon = Icons.info_rounded;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          duration: const Duration(seconds: 3),
+          content: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: accentColor.withValues(alpha: 0.35), width: 1.2),
+              boxShadow: [
+                BoxShadow(color: accentColor.withValues(alpha: 0.18), blurRadius: 20, offset: const Offset(0, 8)),
+                const BoxShadow(color: Color(0xCC040A12), blurRadius: 10, offset: Offset(0, 4)),
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: accentColor, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
   }
 
   @override
@@ -327,7 +417,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               'Verify',
               enabled: controller.connected && controller.chipSelected,
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verify not implemented')));
+                _showSnack('Verify not implemented', kind: _SnackKind.warning);
               },
             ),
             _buildActionButton(
@@ -861,6 +951,8 @@ class _HexTableView extends StatelessWidget {
 extension IntExt on int {
   String toHexString() => toRadixString(16);
 }
+
+enum _SnackKind { success, error, warning, info }
 
 class _BottomNavItem extends StatelessWidget {
   final String label;
