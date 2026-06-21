@@ -47,6 +47,16 @@ class PICkitUsbDriver(private val context: Context) {
   private val scmdMclrGndOff = 0xF6
   private val scmdSetIcspSpeed = 0xEA
 
+  private val SCR_PROG_ENTRY = 1
+  private val SCR_PROG_EXIT = 2
+  private val SCR_RD_DEVID = 3
+  private val SCR_PROGMEM_RD = 4
+  private val SCR_ERASE_CHIP_PREP = 5
+  private val SCR_PROGMEM_ADDRSET = 6
+  private val SCR_ERASE_CHIP = 22
+  private val SCR_EE_RD = 9
+  private val SCR_CONFIG_RD = 13
+
   interface UsbCallback {
     fun onConnectionSuccess()
     fun onConnectionFailed(error: String)
@@ -57,19 +67,17 @@ class PICkitUsbDriver(private val context: Context) {
   private val usbReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
       when (intent.action) {
-        // 1. User plugged in a USB device
         UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
           val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
           device?.let {
             if (it.vendorId == PICKIT2_VID && it.productId == PICKIT2_PID) {
               Log.d(TAG, "PICkit 2 Attached! Auto-requesting permission...")
               pickitDevice = it
-              requestPermission() // Automatically trigger the popup
+              requestPermission()
             }
           }
         }
 
-        // 2. User unplugged a USB device
         UsbManager.ACTION_USB_DEVICE_DETACHED -> {
           val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
           device?.let {
@@ -78,18 +86,16 @@ class PICkitUsbDriver(private val context: Context) {
               if (pickitDevice?.deviceId == it.deviceId) {
                 pickitDevice = null
               }
-              disconnect() // Clean up safely
+              disconnect()
             }
           }
         }
 
-        // 3. User clicked Allow/Deny on the popup
         ACTION_USB_PERMISSION -> {
           synchronized(this) {
             val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
             if (granted) {
               Log.d(TAG, "Permission granted by user!")
-              // We don't connect automatically, we wait for Flutter to call connect()
             } else {
               Log.e(TAG, "Permission denied by user.")
             }
@@ -100,7 +106,6 @@ class PICkitUsbDriver(private val context: Context) {
   }
 
   init {
-    // Register to listen for plug/unplug and permissions
     val filter = IntentFilter().apply {
       addAction(ACTION_USB_PERMISSION)
       addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
@@ -112,7 +117,6 @@ class PICkitUsbDriver(private val context: Context) {
       context.registerReceiver(usbReceiver, filter)
     }
 
-    // As soon as the app starts, check if it's ALREADY plugged in
     autoDetectIfAlreadyConnected()
   }
 
@@ -143,7 +147,6 @@ class PICkitUsbDriver(private val context: Context) {
     }
   }
 
-  // Now called explicitly by Flutter, NOT automatically
   fun connect(callback: UsbCallback) {
     this.currentCallback = callback
 
@@ -244,7 +247,6 @@ class PICkitUsbDriver(private val context: Context) {
   }
 
   private fun readFirmwareVersion(): ByteArray {
-    // PICkit 2 firmware version command: 0x76
     val command = byteArrayOf(0x76.toByte())
     write64(command)
     return read64()
@@ -340,7 +342,6 @@ class PICkitUsbDriver(private val context: Context) {
     try {
       context.unregisterReceiver(usbReceiver)
     } catch (e: IllegalArgumentException) {
-      // Ignored
     }
   }
 
@@ -475,5 +476,155 @@ class PICkitUsbDriver(private val context: Context) {
 
   private fun formatHex(value: Int): String {
     return "0x${value.toUInt().toString(16).uppercase()}"
+  }
+
+  fun eraseChip(catalog: ChipCatalog): Boolean {
+    if (connection == null || endpointIn == null || endpointOut == null) {
+      throw IllegalStateException("PICkit 2 is not connected.")
+    }
+
+    setProgrammingSpeed(1)
+    setVddVoltage(3.3, 0.85)
+    setVppVoltage(3.3, 0.7)
+
+    setMclr(true)
+    vddOn()
+    Thread.sleep(50)
+
+    try {
+      executeScriptByNumber(catalog, SCR_PROG_ENTRY)
+
+      val chipEraseScript = catalog.scriptByNumber(SCR_ERASE_CHIP)?.script
+      if (chipEraseScript != null) {
+        executeScriptBytes(chipEraseScript)
+      }
+
+      executeScriptByNumber(catalog, SCR_PROG_EXIT)
+      return true
+    } finally {
+      vddOff()
+      setMclr(false)
+    }
+  }
+
+  fun readChip(catalog: ChipCatalog, partInfo: Map<String, Any>): Map<String, Any> {
+    if (connection == null || endpointIn == null || endpointOut == null) {
+      throw IllegalStateException("PICkit 2 is not connected.")
+    }
+
+    setProgrammingSpeed(1)
+    setVddVoltage(3.3, 0.85)
+    setVppVoltage(3.3, 0.7)
+
+    setMclr(true)
+    vddOn()
+    Thread.sleep(50)
+
+    try {
+      executeScriptByNumber(catalog, SCR_PROG_ENTRY)
+
+      val programMem = readProgramMemory(catalog, partInfo)
+      val eepromMem = readEepromMemory(catalog, partInfo)
+      val configMem = readConfigMemory(catalog, partInfo)
+
+      executeScriptByNumber(catalog, SCR_PROG_EXIT)
+
+      return mapOf(
+        "success" to true,
+        "programMemory" to programMem,
+        "eepromMemory" to eepromMem,
+        "configMemory" to configMem,
+        "programMemSize" to programMem.size,
+        "eepromMemSize" to eepromMem.size,
+        "configMemSize" to configMem.size,
+      )
+    } finally {
+      vddOff()
+      setMclr(false)
+    }
+  }
+
+  private fun readProgramMemory(catalog: ChipCatalog, partInfo: Map<String, Any>): List<Int> {
+    val progMemSize = (partInfo["flashSize"] as? String)?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+    val bytesPerWord = partInfo["bytesPerLocation"] as? Int ?: 2
+    val wordsPerRead = 16 / bytesPerWord
+    val result = mutableListOf<Int>()
+
+    if (progMemSize <= 0) return result
+
+    downloadAddress3(0)
+    executeScriptByNumber(catalog, SCR_PROGMEM_RD)
+
+    val totalWords = progMemSize
+    var wordsRead = 0
+
+    while (wordsRead < totalWords && wordsRead < 8192) {
+      val upload = uploadData()
+      for (i in 0 until minOf(wordsPerRead, upload.size / bytesPerWord, totalWords - wordsRead)) {
+        var word = 0
+        for (b in 0 until bytesPerWord) {
+          val idx = i * bytesPerWord + b
+          if (idx < upload.size) {
+            word = word or (u8(upload[idx]) shl (b * 8))
+          }
+        }
+        result.add(word)
+      }
+      wordsRead += wordsPerRead
+      if (wordsRead < totalWords) {
+        downloadAddress3(wordsRead * bytesPerWord)
+        executeScriptByNumber(catalog, SCR_PROGMEM_RD)
+      }
+    }
+
+    return result
+  }
+
+  private fun readEepromMemory(catalog: ChipCatalog, partInfo: Map<String, Any>): List<Int> {
+    val eeSize = (partInfo["eepromSize"] as? String)?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+    val result = mutableListOf<Int>()
+
+    if (eeSize <= 0) return result
+
+    val eeAddr = partInfo["eeAddr"] as? Int ?: 0
+    downloadAddress3(eeAddr)
+    executeScriptByNumber(catalog, SCR_EE_RD)
+
+    for (i in 0 until minOf(eeSize, 2048)) {
+      val upload = uploadData()
+      if (upload.isNotEmpty()) {
+        result.add(u8(upload[0]))
+      }
+    }
+
+    return result
+  }
+
+  private fun readConfigMemory(catalog: ChipCatalog, partInfo: Map<String, Any>): List<Int> {
+    val configWords = partInfo["configWords"] as? Int ?: 0
+    val result = mutableListOf<Int>()
+
+    if (configWords <= 0) return result
+
+    executeScriptByNumber(catalog, SCR_CONFIG_RD)
+
+    for (i in 0 until minOf(configWords, 16)) {
+      val upload = uploadData()
+      if (upload.size >= 2) {
+        result.add((u8(upload[0]) shl 8) or u8(upload[1]))
+      }
+    }
+
+    return result
+  }
+
+  private fun downloadAddress3(address: Int) {
+    val cmd = byteArrayOf(
+      0x00.toByte(),
+      (address and 0xFF).toByte(),
+      ((address shr 8) and 0xFF).toByte(),
+      ((address shr 16) and 0xFF).toByte(),
+    )
+    write64(cmd)
   }
 }

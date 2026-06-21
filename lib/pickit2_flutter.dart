@@ -115,13 +115,73 @@ class Pickit2Flutter {
     return result;
   }
 
-  /// Performs hardware-backed target auto-detect using loaded device file scripts.
-  Future<Map<String, dynamic>?> autoDetectChip() async {
-    try {
-      final result = await _channel.invokeMapMethod<String, dynamic>('autoDetectChip');
-      return result == null ? null : Map<String, dynamic>.from(result);
-    } on PlatformException {
-      return null;
-    }
-  }
+/// Performs hardware-backed target auto-detect using loaded device file scripts.
+   Future<Map<String, dynamic>?> autoDetectChip() async {
+     try {
+       final result = await _channel.invokeMapMethod<String, dynamic>('autoDetectChip');
+       return result == null ? null : Map<String, dynamic>.from(result);
+     } on PlatformException {
+       return null;
+     }
+   }
+
+   /// Configures the native side with the manually selected chip parameters so
+   /// that subsequent erase/read operations target the correct memory layout.
+   Future<bool?> selectChip({
+     required String model,
+     required String flashSize,
+     required String eepromSize,
+     int bytesPerLocation = 2,
+     int eeMemBytesPerWord = 1,
+     int eeAddr = 0,
+     int configWords = 0,
+   }) async {
+     try {
+       return await _channel.invokeMethod<bool>('selectChip', {
+         'model': model,
+         'flashSize': flashSize,
+         'eepromSize': eepromSize,
+         'bytesPerLocation': bytesPerLocation,
+         'eeMemBytesPerWord': eeMemBytesPerWord,
+         'eeAddr': eeAddr,
+         'configWords': configWords,
+       });
+     } on PlatformException {
+       return null;
+     }
+   }
+
+   /// Erases the connected chip's program memory, EEPROM, and configuration.
+   Future<bool?> eraseChip() async {
+     try {
+       return await _channel.invokeMethod<bool>('eraseChip');
+     } on PlatformException {
+       return null;
+     }
+   }
+
+   /// Reads program memory, EEPROM, and config from the connected chip.
+   Future<Map<String, dynamic>?> readChip() async {
+     try {
+       final result = await _channel.invokeMapMethod<String, dynamic>('readChip');
+       return result == null ? null : Map<String, dynamic>.from(result);
+     } on PlatformException {
+       return null;
+     }
+   }
+
+   /// Saves read data to a HEX file at the specified path.
+   Future<bool?> saveHexFile(String path, List<int> data, int addressIncrement, int bytesPerWord) async {
+     try {
+       final result = await _channel.invokeMethod<bool>('saveHexFile', {
+         'path': path,
+         'data': data,
+         'addressIncrement': addressIncrement,
+         'bytesPerWord': bytesPerWord,
+       });
+       return result;
+     } on PlatformException {
+       return null;
+     }
+   }
 }

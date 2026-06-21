@@ -28,6 +28,10 @@ class HomeController extends ChangeNotifier {
   bool chipCatalogLoaded = false;
   bool chipSelected = false;
 
+  List<int> readProgramMemory = [];
+  List<int> readEepromMemory = [];
+  List<int> readConfigMemory = [];
+
   String get statusLabel => connected ? 'Ready' : 'Offline';
 
   List<String> get chipFamilies => <String>[allFamiliesOption, ...chipCatalog.keys];
@@ -103,6 +107,13 @@ class HomeController extends ChangeNotifier {
     deviceId = model['deviceId'] ?? 'N/A';
     chipSelected = true;
     connectionStatus = 'Selected chip: $targetDevice';
+    // Sync selected chip parameters to the native side so erase/read
+    // operations use the correct memory layout for this chip.
+    _pickit2.selectChip(
+      model: targetDevice,
+      flashSize: flashSize,
+      eepromSize: eepromSize,
+    );
     notifyListeners();
   }
 
@@ -256,6 +267,42 @@ class HomeController extends ChangeNotifier {
 
   Future<Map<String, dynamic>?> getLoadedFirmwareInfo() async {
     return await _pickit2.getLoadedImageInfo();
+  }
+
+  Future<bool?> eraseChip() async {
+    connectionStatus = 'Erasing chip...';
+    notifyListeners();
+    final result = await _pickit2.eraseChip();
+    if (result == true) {
+      connectionStatus = 'Chip erased successfully';
+    } else {
+      connectionStatus = 'Erase failed';
+    }
+    notifyListeners();
+    return result;
+  }
+
+  Future<Map<String, dynamic>?> readChip() async {
+    connectionStatus = 'Reading chip...';
+    readProgramMemory = [];
+    readEepromMemory = [];
+    readConfigMemory = [];
+    notifyListeners();
+    final result = await _pickit2.readChip();
+    if (result?["success"] == true) {
+      readProgramMemory = List<int>.from(result?["programMemory"] ?? []);
+      readEepromMemory = List<int>.from(result?["eepromMemory"] ?? []);
+      readConfigMemory = List<int>.from(result?["configMemory"] ?? []);
+      connectionStatus = 'Chip read: ${readProgramMemory.length} prog, ${readEepromMemory.length} eeprom, ${readConfigMemory.length} config bytes';
+    } else {
+      connectionStatus = 'Read failed';
+    }
+    notifyListeners();
+    return result;
+  }
+
+  Future<bool?> saveHexFile(String path, List<int> data, int addressIncrement, int bytesPerWord) async {
+    return await _pickit2.saveHexFile(path, data, addressIncrement, bytesPerWord);
   }
 
   String _formatSize(int bytes) {
