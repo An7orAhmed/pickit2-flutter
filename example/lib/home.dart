@@ -243,18 +243,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   _SnackKind _resolveSnackKind(String message) {
     final m = message.toLowerCase();
-    if (m.contains('success') || m.contains('complete') || m.contains('connected') ||
-        m.contains('loaded') || m.contains('saved') || m.contains('erased') ||
-        m.contains('detected') || m.contains('selected') || m.contains('cleared') ||
-        m.contains('read:') || m.contains('read successfully')) {
+    if (m.contains('success') ||
+        m.contains('complete') ||
+        m.contains('connected') ||
+        m.contains('loaded') ||
+        m.contains('saved') ||
+        m.contains('erased') ||
+        m.contains('detected') ||
+        m.contains('selected') ||
+        m.contains('cleared') ||
+        m.contains('read:') ||
+        m.contains('read successfully')) {
       return _SnackKind.success;
     }
-    if (m.contains('fail') || m.contains('error') || m.contains('unavailable') ||
-        m.contains('denied') || m.contains('refused')) {
+    if (m.contains('fail') || m.contains('error') || m.contains('unavailable') || m.contains('denied') || m.contains('refused')) {
       return _SnackKind.error;
     }
-    if (m.contains('not implemented') || m.contains('connect pickit') ||
-        m.contains('no data') || m.contains('unrecognised') || m.contains('first')) {
+    if (m.contains('not implemented') ||
+        m.contains('connect pickit') ||
+        m.contains('no data') ||
+        m.contains('unrecognised') ||
+        m.contains('first')) {
       return _SnackKind.warning;
     }
     return _SnackKind.info;
