@@ -4,6 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
 import 'controller.dart';
+import 'widgets/action_button.dart';
+import 'widgets/bottom_nav_item.dart';
+import 'widgets/hex_table_view.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -379,7 +382,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               child: Row(
                 children: [
                   Expanded(
-                    child: _BottomNavItem(
+                    child: BottomNavItem(
                       label: 'Home',
                       icon: Icons.dashboard_rounded,
                       selected: selectedIndex == 0,
@@ -388,7 +391,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _BottomNavItem(
+                    child: BottomNavItem(
                       label: 'Hex View',
                       icon: Icons.hexagon_rounded,
                       selected: selectedIndex == 1,
@@ -415,29 +418,29 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildActionButton(
-              FontAwesomeIcons.download,
-              'Program',
+            ActionButton(
+              icon: FontAwesomeIcons.download,
+              label: 'Program',
               enabled: controller.connected && controller.chipSelected,
               onTap: () => controller.startProgramming(),
             ),
-            _buildActionButton(
-              FontAwesomeIcons.shield,
-              'Verify',
+            ActionButton(
+              icon: FontAwesomeIcons.shield,
+              label: 'Verify',
               enabled: controller.connected && controller.chipSelected,
               onTap: () {
                 _showSnack('Verify not implemented', kind: _SnackKind.warning);
               },
             ),
-            _buildActionButton(
-              FontAwesomeIcons.trash,
-              'Erase',
+            ActionButton(
+              icon: FontAwesomeIcons.trash,
+              label: 'Erase',
               enabled: controller.connected && controller.chipSelected,
               onTap: () => _handleErase(controller),
             ),
-            _buildActionButton(
-              FontAwesomeIcons.file,
-              'Read',
+            ActionButton(
+              icon: FontAwesomeIcons.file,
+              label: 'Read',
               enabled: controller.connected && controller.chipSelected,
               onTap: () => _handleRead(controller),
             ),
@@ -525,7 +528,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
-          _HexTableView(data: data),
+          HexTableView(data: data),
         ],
       ),
     );
@@ -596,10 +599,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ],
       ),
     );
-  }
-
-  Widget _buildActionButton(IconData icon, String label, {required bool enabled, required VoidCallback onTap}) {
-    return _ActionButton(icon: icon, label: label, enabled: enabled, onTap: onTap);
   }
 
   Widget _buildFirmwareCard(HomeController controller) {
@@ -744,275 +743,4 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 }
 
-class _ActionButton extends StatefulWidget {
-  final IconData icon;
-  final String label;
-  final bool enabled;
-  final VoidCallback? onTap;
-
-  const _ActionButton({required this.icon, required this.label, required this.enabled, this.onTap});
-
-  @override
-  State<_ActionButton> createState() => _ActionButtonState();
-}
-
-class _ActionButtonState extends State<_ActionButton> with SingleTickerProviderStateMixin {
-  late AnimationController _scaleController;
-  late Animation<double> _scaleAnim;
-  bool _hovering = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _scaleController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 110),
-      reverseDuration: const Duration(milliseconds: 180),
-    );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.92).animate(CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
-  }
-
-  @override
-  void dispose() {
-    _scaleController.dispose();
-    super.dispose();
-  }
-
-  void _onTapDown(TapDownDetails _) {
-    if (widget.enabled) _scaleController.forward();
-  }
-
-  void _onTapUp(TapUpDetails _) => _scaleController.reverse();
-  void _onTapCancel() => _scaleController.reverse();
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: AnimatedOpacity(
-          opacity: widget.enabled ? 1.0 : 0.4,
-          duration: const Duration(milliseconds: 200),
-          child: MouseRegion(
-            onEnter: (_) => setState(() => _hovering = true),
-            onExit: (_) => setState(() => _hovering = false),
-            cursor: widget.enabled ? SystemMouseCursors.click : SystemMouseCursors.forbidden,
-            child: ScaleTransition(
-              scale: _scaleAnim,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                curve: Curves.easeOut,
-                decoration: BoxDecoration(
-                  color: _hovering && widget.enabled ? const Color(0xFF1C2E47) : const Color(0xFF111B2D),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: _hovering && widget.enabled ? Colors.blueAccent.withValues(alpha: 0.45) : Colors.white.withValues(alpha: 0.04),
-                  ),
-                  boxShadow: _hovering && widget.enabled
-                      ? [const BoxShadow(color: Color(0x331B6FFF), blurRadius: 14, offset: Offset(0, 6))]
-                      : null,
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: widget.enabled ? widget.onTap : null,
-                    onTapDown: _onTapDown,
-                    onTapUp: _onTapUp,
-                    onTapCancel: _onTapCancel,
-                    splashColor: Colors.blueAccent.withValues(alpha: 0.28),
-                    highlightColor: Colors.blueAccent.withValues(alpha: 0.10),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 200),
-                            child: FaIcon(
-                              widget.icon,
-                              key: ValueKey(widget.enabled),
-                              color: widget.enabled ? Colors.blueAccent : Colors.white38,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            widget.label,
-                            style: TextStyle(
-                              color: widget.enabled ? Colors.white70 : Colors.white38,
-                              fontSize: 13,
-                              fontWeight: widget.enabled ? FontWeight.w600 : FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HexTableView extends StatelessWidget {
-  final List<int> data;
-
-  const _HexTableView({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: DataTable(
-        columnSpacing: 4,
-        headingRowHeight: 32,
-        dataRowMinHeight: 24,
-        dataRowMaxHeight: 24,
-        headingRowColor: WidgetStateProperty.all(const Color(0xFF1A3656)),
-        columns: const [
-          DataColumn(
-            label: Text('Addr', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('0', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('1', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('2', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('3', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('4', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('5', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('6', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('7', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('8', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('9', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('A', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('B', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('C', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('D', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('E', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-          DataColumn(
-            label: Text('F', style: TextStyle(color: Colors.lightBlueAccent, fontSize: 11)),
-          ),
-        ],
-        rows: _buildRows(),
-      ),
-    );
-  }
-
-  List<DataRow> _buildRows() {
-    final rows = <DataRow>[];
-    for (int i = 0; i < data.length; i += 16) {
-      final address = i;
-      final rowCells = <DataCell>[];
-      rowCells.add(DataCell(Text('0x${address.toHexString().toUpperCase()}', style: const TextStyle(color: Colors.white54, fontSize: 11))));
-      for (int j = 0; j < 16; j++) {
-        final idx = i + j;
-        final cellValue = idx < data.length ? data[idx] : 0xFF;
-        final isBlank = idx >= data.length || data[idx] == 0xFF;
-        rowCells.add(
-          DataCell(
-            Text(
-              '0x${cellValue.toHexString().toUpperCase().padLeft(2, '0')}',
-              style: TextStyle(color: isBlank ? Colors.white24 : Colors.white, fontSize: 11),
-            ),
-          ),
-        );
-      }
-      rows.add(DataRow(cells: rowCells));
-    }
-    return rows;
-  }
-}
-
-extension IntExt on int {
-  String toHexString() => toRadixString(16);
-}
-
 enum _SnackKind { success, error, warning, info }
-
-class _BottomNavItem extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _BottomNavItem({required this.label, required this.icon, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: selected
-            ? const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF2D8CFF), Color(0xFF1162FF)])
-            : null,
-        color: selected ? null : Colors.white.withValues(alpha: 0.03),
-        border: Border.all(color: selected ? Colors.white.withValues(alpha: 0.16) : Colors.white.withValues(alpha: 0.06)),
-        boxShadow: selected ? const [BoxShadow(color: Color(0x55156CFF), blurRadius: 18, offset: Offset(0, 10))] : null,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, size: 20, color: selected ? Colors.white : Colors.white70),
-                const SizedBox(width: 10),
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  style: TextStyle(
-                    color: selected ? Colors.white : Colors.white70,
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    letterSpacing: 0.2,
-                  ),
-                  child: Text(label),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
