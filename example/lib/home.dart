@@ -651,12 +651,7 @@ class _ActionButton extends StatefulWidget {
   final bool enabled;
   final VoidCallback? onTap;
 
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.enabled,
-    this.onTap,
-  });
+  const _ActionButton({required this.icon, required this.label, required this.enabled, this.onTap});
 
   @override
   State<_ActionButton> createState() => _ActionButtonState();
@@ -675,9 +670,7 @@ class _ActionButtonState extends State<_ActionButton> with SingleTickerProviderS
       duration: const Duration(milliseconds: 110),
       reverseDuration: const Duration(milliseconds: 180),
     );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.92).animate(
-      CurvedAnimation(parent: _scaleController, curve: Curves.easeOut),
-    );
+    _scaleAnim = Tween<double>(begin: 1.0, end: 0.92).animate(CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
   }
 
   @override
@@ -714,9 +707,7 @@ class _ActionButtonState extends State<_ActionButton> with SingleTickerProviderS
                   color: _hovering && widget.enabled ? const Color(0xFF1C2E47) : const Color(0xFF111B2D),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: _hovering && widget.enabled
-                        ? Colors.blueAccent.withValues(alpha: 0.45)
-                        : Colors.white.withValues(alpha: 0.04),
+                    color: _hovering && widget.enabled ? Colors.blueAccent.withValues(alpha: 0.45) : Colors.white.withValues(alpha: 0.04),
                   ),
                   boxShadow: _hovering && widget.enabled
                       ? [const BoxShadow(color: Color(0x331B6FFF), blurRadius: 14, offset: Offset(0, 6))]

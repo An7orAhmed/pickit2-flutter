@@ -109,11 +109,7 @@ class HomeController extends ChangeNotifier {
     connectionStatus = 'Selected chip: $targetDevice';
     // Sync selected chip parameters to the native side so erase/read
     // operations use the correct memory layout for this chip.
-    _pickit2.selectChip(
-      model: targetDevice,
-      flashSize: flashSize,
-      eepromSize: eepromSize,
-    );
+    _pickit2.selectChip(model: targetDevice, flashSize: flashSize, eepromSize: eepromSize);
     notifyListeners();
   }
 
@@ -293,7 +289,8 @@ class HomeController extends ChangeNotifier {
       readProgramMemory = List<int>.from(result?["programMemory"] ?? []);
       readEepromMemory = List<int>.from(result?["eepromMemory"] ?? []);
       readConfigMemory = List<int>.from(result?["configMemory"] ?? []);
-      connectionStatus = 'Chip read: ${readProgramMemory.length} prog, ${readEepromMemory.length} eeprom, ${readConfigMemory.length} config bytes';
+      connectionStatus =
+          'Chip read: ${readProgramMemory.length} prog, ${readEepromMemory.length} eeprom, ${readConfigMemory.length} config bytes';
     } else {
       connectionStatus = 'Read failed';
     }
