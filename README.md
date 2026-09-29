@@ -1,4 +1,4 @@
-# pickit2_flutter
+# PICKit2
 
 A Flutter PICkit 2 programmer with native Android USB and macOS IOKit backends.
 
@@ -15,7 +15,7 @@ The initial desktop feature set includes:
 - read, erase, blank check, program, and verify
 - Intel HEX/BIN loading and exact HEX export of a read target
 - program, EEPROM, configuration, and user-ID memory transfer
-- masked raw configuration-word editing and HEX/EEPROM/config viewers
+- mask-driven bitwise configuration-word editing and HEX/EEPROM/config viewers
 
 The host app needs the `com.apple.security.device.usb` entitlement. The example
 runner already includes it in debug and release entitlements.

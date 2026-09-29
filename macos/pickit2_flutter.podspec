@@ -11,7 +11,7 @@ Native PICkit 2 USB programming support backed by the Microchip pk2cmd engine.
                        DESC
   s.homepage         = 'http://example.com'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = 'Antor Ahmed / Kitsware'
 
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*.{h,m,mm,swift,cpp,c}'

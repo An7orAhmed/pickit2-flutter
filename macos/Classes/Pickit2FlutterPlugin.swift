@@ -1,8 +1,48 @@
 import Cocoa
 import FlutterMacOS
+import UniformTypeIdentifiers
+
+private final class NativeOperationExecutor {
+  private let condition = NSCondition()
+  private var tasks: [() -> Void] = []
+  private var stopped = false
+  private lazy var thread: Thread = {
+    let thread = Thread { [weak self] in self?.run() }
+    thread.name = "com.an7or.pickit2.native"
+    thread.qualityOfService = .userInitiated
+    return thread
+  }()
+
+  init() {
+    thread.start()
+  }
+
+  func async(_ task: @escaping () -> Void) {
+    condition.lock()
+    tasks.append(task)
+    condition.signal()
+    condition.unlock()
+  }
+
+  private func run() {
+    while true {
+      condition.lock()
+      while tasks.isEmpty && !stopped {
+        condition.wait()
+      }
+      if stopped {
+        condition.unlock()
+        return
+      }
+      let task = tasks.removeFirst()
+      condition.unlock()
+      autoreleasepool(invoking: task)
+    }
+  }
+}
 
 public final class Pickit2FlutterPlugin: NSObject, FlutterPlugin {
-  private let operationQueue = DispatchQueue(label: "com.an7or.pickit2.native", qos: .userInitiated)
+  private let operationQueue = NativeOperationExecutor()
   private var channel: FlutterMethodChannel?
   private var bridge: Pk2NativeBridge?
   private var bridgeStartupError: Error?
@@ -53,6 +93,10 @@ public final class Pickit2FlutterPlugin: NSObject, FlutterPlugin {
       result(serialNumber)
     case "getFirmwareVersion":
       result(firmwareVersion)
+    case "pickFirmwareFile":
+      pickFirmwareFile(result)
+    case "pickHexSavePath":
+      pickHexSavePath(call, result: result)
     case "loadHexFile":
       loadHexFile(call, result: result)
     case "loadBinFile":
@@ -117,6 +161,41 @@ public final class Pickit2FlutterPlugin: NSObject, FlutterPlugin {
       }
     default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func pickFirmwareFile(_ result: @escaping FlutterResult) {
+    let panel = NSOpenPanel()
+    panel.title = "Select firmware file"
+    panel.message = "Choose an Intel HEX or binary firmware image."
+    var firmwareTypes: [UTType] = []
+    if let hexType = UTType(filenameExtension: "hex") {
+      firmwareTypes.append(hexType)
+    }
+    if let binType = UTType(filenameExtension: "bin") {
+      firmwareTypes.append(binType)
+    }
+    panel.allowedContentTypes = firmwareTypes
+    panel.allowsMultipleSelection = false
+    panel.canChooseDirectories = false
+    panel.begin { response in
+      result(response == .OK ? panel.url?.path : nil)
+    }
+  }
+
+  private func pickHexSavePath(
+    _ call: FlutterMethodCall,
+    result: @escaping FlutterResult
+  ) {
+    let panel = NSSavePanel()
+    panel.title = "Save read data"
+    panel.nameFieldStringValue = arguments(call)["fileName"] as? String ?? "read_data.hex"
+    if let hexType = UTType(filenameExtension: "hex") {
+      panel.allowedContentTypes = [hexType]
+    }
+    panel.canCreateDirectories = true
+    panel.begin { response in
+      result(response == .OK ? panel.url?.path : nil)
     }
   }
 

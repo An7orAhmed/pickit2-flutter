@@ -25,7 +25,7 @@ class MyApp extends StatelessWidget {
         builder: (context, themeController, child) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'Pickit2 Programmer',
+            title: 'PICKit2',
             themeMode: themeController.mode,
             theme: _buildTheme(Brightness.light, desktop),
             darkTheme: _buildTheme(Brightness.dark, desktop),

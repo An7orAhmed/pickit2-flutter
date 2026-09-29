@@ -9,6 +9,7 @@ class HomeController extends ChangeNotifier {
 
   String connectionStatus = 'Disconnected';
   bool connected = false;
+  bool busy = false;
   int progress = 0;
   bool programming = false;
   String writePhase = '';
@@ -201,12 +202,17 @@ class HomeController extends ChangeNotifier {
     connectionStatus = 'Selected chip: $targetDevice';
     // Sync selected chip parameters to the native side so erase/read
     // operations use the correct memory layout for this chip.
-    final selected = await _pickit2.selectChip(
-      model: targetDevice,
-      flashSize: flashSize,
-      eepromSize: eepromSize,
-    );
-    if (selected != true) {
+    try {
+      final selected = await _pickit2.selectChip(
+        model: targetDevice,
+        flashSize: flashSize,
+        eepromSize: eepromSize,
+      );
+      if (selected != true) {
+        chipSelected = false;
+        connectionStatus = 'Failed to select chip: $targetDevice';
+      }
+    } catch (_) {
       chipSelected = false;
       connectionStatus = 'Failed to select chip: $targetDevice';
     }
@@ -226,56 +232,68 @@ class HomeController extends ChangeNotifier {
       return;
     }
 
+    if (busy) return;
+    busy = true;
     connectionStatus = 'Detecting chip...';
     notifyListeners();
 
-    final detected = await _pickit2.autoDetectChip();
-    final found = detected?['found'] == true;
-    final detectedModel = (detected?['model'] as String?)?.trim();
-    final detectedFamily = (detected?['family'] as String?)?.trim();
-    final detectedId = (detected?['deviceId'] as String?)?.trim();
+    try {
+      final detected = await _pickit2.autoDetectChip();
+      final found = detected?['found'] == true;
+      final detectedModel = (detected?['model'] as String?)?.trim();
+      final detectedFamily = (detected?['family'] as String?)?.trim();
+      final detectedId = (detected?['deviceId'] as String?)?.trim();
 
-    if (!found || detectedModel == null || detectedModel.isEmpty) {
-      targetDevice = 'Unrecognised';
-      deviceFamily = 'Unknown';
-      flashSize = 'N/A';
-      ramSize = 'N/A';
-      eepromSize = 'N/A';
-      deviceId = 'N/A';
-      selectedChipFamily = allFamiliesOption;
+      if (!found || detectedModel == null || detectedModel.isEmpty) {
+        targetDevice = 'Unrecognised';
+        deviceFamily = 'Unknown';
+        flashSize = 'N/A';
+        ramSize = 'N/A';
+        eepromSize = 'N/A';
+        deviceId = 'N/A';
+        selectedChipFamily = allFamiliesOption;
+        chipSelected = false;
+        connectionStatus = 'Chip auto-detect failed';
+        return;
+      }
+
+      final family = (detectedFamily != null && detectedFamily.isNotEmpty)
+          ? detectedFamily
+          : _findFamilyByModel(detectedModel);
+      final familyModels = getModelsByFamily(family);
+      final matched = familyModels.firstWhere(
+        (row) =>
+            (row['model'] ?? '').toUpperCase() == detectedModel.toUpperCase(),
+        orElse: () => <String, String>{
+          'model': detectedModel,
+          'family': family,
+          'deviceId': detectedId ?? 'N/A',
+          'flashSize': flashSize,
+          'ramSize': ramSize,
+          'eepromSize': eepromSize,
+        },
+      );
+
+      if (detectedId != null && detectedId.isNotEmpty) {
+        matched['deviceId'] = detectedId;
+      }
+
+      await selectChipByFamilyAndModel(family, matched);
+      if (chipSelected) {
+        connectionStatus = 'Detected chip: $targetDevice';
+      }
+    } catch (_) {
       chipSelected = false;
       connectionStatus = 'Chip auto-detect failed';
+    } finally {
+      busy = false;
       notifyListeners();
-      return;
     }
-
-    final family = (detectedFamily != null && detectedFamily.isNotEmpty)
-        ? detectedFamily
-        : _findFamilyByModel(detectedModel);
-    final familyModels = getModelsByFamily(family);
-    final matched = familyModels.firstWhere(
-      (row) =>
-          (row['model'] ?? '').toUpperCase() == detectedModel.toUpperCase(),
-      orElse: () => <String, String>{
-        'model': detectedModel,
-        'family': family,
-        'deviceId': detectedId ?? 'N/A',
-        'flashSize': flashSize,
-        'ramSize': ramSize,
-        'eepromSize': eepromSize,
-      },
-    );
-
-    if (detectedId != null && detectedId.isNotEmpty) {
-      matched['deviceId'] = detectedId;
-    }
-
-    await selectChipByFamilyAndModel(family, matched);
-    connectionStatus = 'Detected chip: $targetDevice';
-    notifyListeners();
   }
 
   Future<void> connect() async {
+    if (busy) return;
+    busy = true;
     connectionStatus = 'Connecting...';
     notifyListeners();
 
@@ -299,12 +317,15 @@ class HomeController extends ChangeNotifier {
       connectionStatus = 'Connection failed';
       connected = false;
       serialNumber = 'N/A';
+    } finally {
+      busy = false;
+      notifyListeners();
     }
-
-    notifyListeners();
   }
 
   Future<void> disconnect() async {
+    if (busy) return;
+    busy = true;
     connectionStatus = 'Disconnecting...';
     progress = 0;
     writePhase = '';
@@ -323,9 +344,10 @@ class HomeController extends ChangeNotifier {
       connectionStatus = 'Disconnect failed';
       connected = false;
       serialNumber = 'N/A';
+    } finally {
+      busy = false;
+      notifyListeners();
     }
-
-    notifyListeners();
   }
 
   Future<Map<String, dynamic>?> loadFirmwareFile(String path) async {
@@ -387,6 +409,11 @@ class HomeController extends ChangeNotifier {
     }
   }
 
+  Future<String?> pickFirmwarePath() => _pickit2.pickFirmwareFile();
+
+  Future<String?> pickReadSavePath() =>
+      _pickit2.pickHexSavePath(fileName: 'read_data.hex');
+
   Future<void> clearFirmware() async {
     await _pickit2.clearLoadedImage();
     firmwareName = 'N/A';
@@ -408,54 +435,80 @@ class HomeController extends ChangeNotifier {
   }
 
   Future<bool?> eraseChip() async {
+    if (busy) return false;
+    busy = true;
     connectionStatus = 'Erasing chip...';
     notifyListeners();
-    final result = await _pickit2.eraseChip();
-    if (result == true) {
-      connectionStatus = 'Chip erased successfully';
-    } else {
+    try {
+      final result = await _pickit2.eraseChip();
+      connectionStatus = result == true
+          ? 'Chip erased successfully'
+          : 'Erase failed';
+      return result;
+    } catch (_) {
       connectionStatus = 'Erase failed';
+      return false;
+    } finally {
+      busy = false;
+      notifyListeners();
     }
-    notifyListeners();
-    return result;
   }
 
   Future<Map<String, dynamic>?> blankCheck() async {
+    if (busy) return null;
+    busy = true;
     connectionStatus = 'Blank checking chip...';
     notifyListeners();
-    final result = await _pickit2.blankCheck();
-    if (result == null) {
+    try {
+      final result = await _pickit2.blankCheck();
+      if (result == null) {
+        connectionStatus = 'Blank check failed';
+      } else {
+        connectionStatus =
+            result['message'] as String? ??
+            (result['blank'] == true
+                ? 'Device is blank'
+                : 'Device is not blank');
+      }
+      return result;
+    } catch (_) {
       connectionStatus = 'Blank check failed';
-    } else {
-      connectionStatus =
-          result['message'] as String? ??
-          (result['blank'] == true ? 'Device is blank' : 'Device is not blank');
+      return null;
+    } finally {
+      busy = false;
+      notifyListeners();
     }
-    notifyListeners();
-    return result;
   }
 
   Future<Map<String, dynamic>?> readChip() async {
+    if (busy) return null;
+    busy = true;
     connectionStatus = 'Reading chip...';
     readProgramMemory = [];
     readEepromMemory = [];
     readConfigMemory = [];
     notifyListeners();
-    final result = await _pickit2.readChip();
-    if (result?["success"] == true) {
-      readProgramMemory = List<int>.from(result?["programMemory"] ?? []);
-      readEepromMemory = List<int>.from(result?["eepromMemory"] ?? []);
-      readConfigMemory = List<int>.from(result?["configMemory"] ?? []);
-      readProgramBaseAddress = result?["programBaseAddress"] as int? ?? 0;
-      readEepromBaseAddress = result?["eepromBaseAddress"] as int? ?? 0;
-      readConfigBaseAddress = result?["configBaseAddress"] as int? ?? 0;
-      connectionStatus =
-          'Chip read: ${readProgramMemory.length} prog, ${readEepromMemory.length} eeprom, ${readConfigMemory.length} config bytes';
-    } else {
+    try {
+      final result = await _pickit2.readChip();
+      if (result?["success"] == true) {
+        readProgramMemory = List<int>.from(result?["programMemory"] ?? []);
+        readEepromMemory = List<int>.from(result?["eepromMemory"] ?? []);
+        readConfigMemory = List<int>.from(result?["configMemory"] ?? []);
+        readProgramBaseAddress = result?["programBaseAddress"] as int? ?? 0;
+        readEepromBaseAddress = result?["eepromBaseAddress"] as int? ?? 0;
+        readConfigBaseAddress = result?["configBaseAddress"] as int? ?? 0;
+        connectionStatus = 'Read complete';
+      } else {
+        connectionStatus = 'Read failed';
+      }
+      return result;
+    } catch (_) {
       connectionStatus = 'Read failed';
+      return null;
+    } finally {
+      busy = false;
+      notifyListeners();
     }
-    notifyListeners();
-    return result;
   }
 
   Future<bool?> saveHexFile(
@@ -500,9 +553,10 @@ class HomeController extends ChangeNotifier {
     return '$bytes B';
   }
 
-  Future<void> startProgramming() async {
-    if (!connected || programming || !hasImportedData) return;
+  Future<bool> startProgramming() async {
+    if (!connected || busy || !hasImportedData) return false;
 
+    busy = true;
     programming = true;
     progress = 0;
     writePhase = '';
@@ -534,18 +588,22 @@ class HomeController extends ChangeNotifier {
         writeMessage = msg.isNotEmpty ? msg : 'Write failed';
         connectionStatus = 'Write failed';
       }
+      return success;
     } catch (e) {
       writePhase = 'error';
       writeMessage = e.toString();
       connectionStatus = 'Write failed: ${e.toString()}';
+      return false;
+    } finally {
+      programming = false;
+      busy = false;
+      notifyListeners();
     }
-
-    programming = false;
-    notifyListeners();
   }
 
   Future<bool> verifyFirmware() async {
-    if (!connected || programming || !hasImportedData) return false;
+    if (!connected || busy || !hasImportedData) return false;
+    busy = true;
     programming = true;
     progress = 0;
     writePhase = 'verify';
@@ -559,16 +617,25 @@ class HomeController extends ChangeNotifier {
     };
     notifyListeners();
 
-    final result = await _pickit2.verifyFirmware();
-    final success = result?['success'] == true;
-    connectionStatus = success
-        ? 'Verification succeeded'
-        : 'Verification failed';
-    writeMessage = result?['message'] as String? ?? connectionStatus;
-    writePhase = success ? 'done' : 'error';
-    programming = false;
-    notifyListeners();
-    return success;
+    try {
+      final result = await _pickit2.verifyFirmware();
+      final success = result?['success'] == true;
+      connectionStatus = success
+          ? 'Verification succeeded'
+          : 'Verification failed';
+      writeMessage = result?['message'] as String? ?? connectionStatus;
+      writePhase = success ? 'done' : 'error';
+      return success;
+    } catch (_) {
+      connectionStatus = 'Verification failed';
+      writeMessage = connectionStatus;
+      writePhase = 'error';
+      return false;
+    } finally {
+      programming = false;
+      busy = false;
+      notifyListeners();
+    }
   }
 
   String _findFamilyByModel(String modelName) {

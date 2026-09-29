@@ -51,6 +51,7 @@ typedef void *pickit_dev;
 #else		// Mac OSX
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <mach/mach.h>
 #include <IOKit/IOKitLib.h>
 #include <IOKit/IOCFPlugIn.h>
 #include <IOKit/IOMessage.h>
@@ -58,11 +59,14 @@ typedef void *pickit_dev;
 #include <AvailabilityMacros.h>
 
 struct hidreport {
- 	IOHIDDeviceInterface122 **intf;
+	IOHIDDeviceInterface122 **intf;
 	char	*buffer;
- 	int	size;
- 	int	size_received;
- 	int	timeout;
+	int	size;
+	int	size_received;
+	int	timeout;
+	CFRunLoopRef run_loop;
+	CFRunLoopSourceRef run_loop_source;
+	mach_port_t async_port;
 };
 
 typedef struct hidreport pickit_dev;

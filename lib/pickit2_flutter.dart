@@ -56,6 +56,26 @@ class Pickit2Flutter {
     }
   }
 
+  /// Opens the native macOS firmware chooser and returns the selected path.
+  Future<String?> pickFirmwareFile() async {
+    try {
+      return await _channel.invokeMethod<String>('pickFirmwareFile');
+    } on PlatformException {
+      return null;
+    }
+  }
+
+  /// Opens the native macOS HEX save panel and returns the selected path.
+  Future<String?> pickHexSavePath({String fileName = 'read_data.hex'}) async {
+    try {
+      return await _channel.invokeMethod<String>('pickHexSavePath', {
+        'fileName': fileName,
+      });
+    } on PlatformException {
+      return null;
+    }
+  }
+
   /// Loads a HEX file and returns summary info.
   Future<Map<String, dynamic>?> loadHexFile(String path) async {
     try {

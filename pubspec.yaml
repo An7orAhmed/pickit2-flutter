@@ -1,5 +1,5 @@
 name: pickit2_flutter
-description: "A new Flutter plugin project."
+description: "Native PICKit2 USB programming support for Flutter."
 version: 0.0.1
 homepage:
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -506,21 +507,23 @@ class _HomeScreenState extends State<HomeScreen>
                                 const SizedBox(height: 4),
                                 Expanded(
                                   child: models.isEmpty
-                                      ? const Center(
+                                      ? Center(
                                           child: Column(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Icon(
                                                 Icons.search_off_rounded,
                                                 size: 28,
-                                                color: Colors.white24,
+                                                color: colors.onSurface
+                                                    .withValues(alpha: 0.24),
                                               ),
-                                              SizedBox(height: 8),
+                                              const SizedBox(height: 8),
                                               Text(
                                                 'No matching devices',
                                                 style: TextStyle(
                                                   fontSize: 11.5,
-                                                  color: Colors.white38,
+                                                  color:
+                                                      colors.onSurfaceVariant,
                                                 ),
                                               ),
                                             ],
@@ -543,7 +546,7 @@ class _HomeScreenState extends State<HomeScreen>
                                                 controller.targetDevice;
                                             return Material(
                                               color: selected
-                                                  ? const Color(0xFF182E48)
+                                                  ? colors.primaryContainer
                                                   : Colors.transparent,
                                               borderRadius:
                                                   BorderRadius.circular(5),
@@ -575,13 +578,12 @@ class _HomeScreenState extends State<HomeScreen>
                                                         child: Row(
                                                           children: [
                                                             if (selected) ...[
-                                                              const Icon(
+                                                              Icon(
                                                                 Icons
                                                                     .check_rounded,
                                                                 size: 14,
-                                                                color: Color(
-                                                                  0xFF79B9FF,
-                                                                ),
+                                                                color: colors
+                                                                    .onPrimaryContainer,
                                                               ),
                                                               const SizedBox(
                                                                 width: 6,
@@ -608,12 +610,11 @@ class _HomeScreenState extends State<HomeScreen>
                                                         child: Text(
                                                           model['deviceId'] ??
                                                               'N/A',
-                                                          style:
-                                                              const TextStyle(
-                                                                fontSize: 10.5,
-                                                                color: Colors
-                                                                    .white54,
-                                                              ),
+                                                          style: TextStyle(
+                                                            fontSize: 10.5,
+                                                            color: colors
+                                                                .onSurfaceVariant,
+                                                          ),
                                                         ),
                                                       ),
                                                       Expanded(
@@ -621,12 +622,11 @@ class _HomeScreenState extends State<HomeScreen>
                                                         child: Text(
                                                           model['flashSize'] ??
                                                               'N/A',
-                                                          style:
-                                                              const TextStyle(
-                                                                fontSize: 10.5,
-                                                                color: Colors
-                                                                    .white54,
-                                                              ),
+                                                          style: TextStyle(
+                                                            fontSize: 10.5,
+                                                            color: colors
+                                                                .onSurfaceVariant,
+                                                          ),
                                                         ),
                                                       ),
                                                     ],
@@ -654,14 +654,17 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _pickFirmwareFile(HomeController controller) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['hex', 'bin'],
-      dialogTitle: 'Select firmware file (.hex or .bin)',
-    );
-    if (result == null || result.files.isEmpty) return;
-
-    final path = result.files.single.path;
+    final String? path;
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      path = await controller.pickFirmwarePath();
+    } else {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['hex', 'bin'],
+        dialogTitle: 'Select firmware file (.hex or .bin)',
+      );
+      path = result?.files.single.path;
+    }
     if (path == null) return;
 
     final loaded = await controller.loadFirmwareFile(path);
@@ -702,7 +705,11 @@ class _HomeScreenState extends State<HomeScreen>
       confirmLabel: 'Program',
     );
     if (!confirmed) return;
-    await controller.startProgramming();
+    final success = await controller.startProgramming();
+    if (!mounted) return;
+    if (success) {
+      await SystemSound.play(SystemSoundType.alert);
+    }
     if (mounted) _showSnack(controller.connectionStatus);
   }
 
@@ -755,78 +762,195 @@ class _HomeScreenState extends State<HomeScreen>
     if (!mounted) return;
     if (controller.configWords.isEmpty) {
       _showSnack(
-        'Load a HEX file containing configuration data first',
+        'Load a firmware image containing configuration data first',
         kind: _SnackKind.warning,
       );
       return;
     }
 
-    final editors = <int, TextEditingController>{
+    await _showConfigurationEditor(controller);
+  }
+
+  Future<void> _showConfigurationEditor(HomeController controller) async {
+    final originalValues = <int, int>{
       for (final word in controller.configWords)
-        word['index'] as int: TextEditingController(
-          text: (word['value'] as int? ?? 0)
-              .toRadixString(16)
-              .toUpperCase()
-              .padLeft(4, '0'),
-        ),
+        word['index'] as int: word['value'] as int? ?? 0,
     };
+    final editedValues = Map<int, int>.from(originalValues);
+
     final saved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('${controller.targetDevice} configuration'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: controller.configWords.map((word) {
-              final index = word['index'] as int;
-              final address = word['address'] as int? ?? 0;
-              final mask = word['mask'] as int? ?? 0xFFFF;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: TextField(
-                  controller: editors[index],
-                  decoration: InputDecoration(
-                    labelText:
-                        'CONFIG${index + 1} · 0x${address.toRadixString(16).toUpperCase()}',
-                    helperText:
-                        'Hex value · writable mask 0x${mask.toRadixString(16).toUpperCase().padLeft(4, '0')}',
-                    prefixText: '0x',
-                    border: const OutlineInputBorder(),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final colors = Theme.of(context).colorScheme;
+          return Dialog(
+            child: SizedBox(
+              width: 620,
+              height: 520,
+              child: Column(
+                children: [
+                  Container(
+                    height: 50,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    color: colors.surfaceContainerHigh,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.tune_rounded,
+                          size: 18,
+                          color: colors.primary,
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            '${controller.targetDevice} Configuration',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              for (final word in controller.configWords) {
-                final index = word['index'] as int;
-                final value = int.tryParse(
-                  editors[index]!.text.trim().replaceFirst(RegExp(r'^0x'), ''),
-                  radix: 16,
-                );
-                if (value == null ||
-                    !await controller.updateConfigWord(index, value)) {
-                  return;
-                }
-              }
-              if (dialogContext.mounted) Navigator.of(dialogContext).pop(true);
-            },
-            child: const Text('Apply'),
-          ),
-        ],
+                  Expanded(
+                    child: ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: controller.configWords.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (context, wordPosition) {
+                        final word = controller.configWords[wordPosition];
+                        final index = word['index'] as int;
+                        final address = word['address'] as int? ?? 0;
+                        final mask = word['mask'] as int? ?? 0;
+                        final byteCount = word['byteCount'] as int? ?? 2;
+                        final value = editedValues[index] ?? 0;
+                        final bitCount = byteCount * 8;
+                        final editableBits = [
+                          for (var bit = bitCount - 1; bit >= 0; bit--)
+                            if ((mask & (1 << bit)) != 0) bit,
+                        ];
+
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colors.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(7),
+                            border: Border.all(color: colors.outlineVariant),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      'CONFIG${index + 1}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '@ 0x${address.toRadixString(16).toUpperCase()}',
+                                      style: TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 10.5,
+                                        color: colors.onSurfaceVariant,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      '0x${value.toRadixString(16).toUpperCase().padLeft(byteCount * 2, '0')}',
+                                      style: TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 11.5,
+                                        color: colors.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                if (editableBits.isEmpty)
+                                  Text(
+                                    'No editable bits',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                                  )
+                                else
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: editableBits.map((bit) {
+                                      final set = (value & (1 << bit)) != 0;
+                                      return FilterChip(
+                                        label: Text(
+                                          'Bit $bit  ${set ? '1' : '0'}',
+                                          style: const TextStyle(
+                                            fontFamily: 'monospace',
+                                            fontSize: 10.5,
+                                          ),
+                                        ),
+                                        selected: set,
+                                        onSelected: (_) {
+                                          setDialogState(() {
+                                            editedValues[index] =
+                                                value ^ (1 << bit);
+                                          });
+                                        },
+                                        visualDensity: VisualDensity.compact,
+                                      );
+                                    }).toList(),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: () async {
+                            for (final entry in editedValues.entries) {
+                              if (entry.value == originalValues[entry.key]) {
+                                continue;
+                              }
+                              if (!await controller.updateConfigWord(
+                                entry.key,
+                                entry.value,
+                              )) {
+                                return;
+                              }
+                            }
+                            if (dialogContext.mounted) {
+                              Navigator.of(dialogContext).pop(true);
+                            }
+                          },
+                          child: const Text('Apply'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
-    for (final editor in editors.values) {
-      editor.dispose();
-    }
     if (saved == true && mounted) _showSnack('Configuration words updated');
   }
 
@@ -841,12 +965,17 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _saveReadToHex(HomeController controller) async {
-    final result = await FilePicker.platform.saveFile(
-      dialogTitle: 'Save Read Data as HEX',
-      fileName: 'read_data.hex',
-      type: FileType.custom,
-      allowedExtensions: ['hex'],
-    );
+    final String? result;
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      result = await controller.pickReadSavePath();
+    } else {
+      result = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save Read Data as HEX',
+        fileName: 'read_data.hex',
+        type: FileType.custom,
+        allowedExtensions: ['hex'],
+      );
+    }
     if (result == null) return;
     if (!mounted) return;
 
@@ -912,27 +1041,34 @@ class _HomeScreenState extends State<HomeScreen>
   void _showSnack(String message, {_SnackKind? kind}) {
     if (!mounted) return;
     final resolved = kind ?? _resolveSnackKind(message);
+    final colors = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
 
     final Color bgColor;
     final Color accentColor;
+    final Color textColor;
     final IconData icon;
 
     switch (resolved) {
       case _SnackKind.success:
-        bgColor = const Color(0xFF0A2E1A);
-        accentColor = const Color(0xFF4ADE80);
+        bgColor = dark ? const Color(0xFF10261A) : const Color(0xFFDDF7E7);
+        accentColor = dark ? const Color(0xFF67D391) : const Color(0xFF197A43);
+        textColor = dark ? const Color(0xFFE6F6EB) : const Color(0xFF123D25);
         icon = Icons.check_circle_rounded;
       case _SnackKind.error:
-        bgColor = const Color(0xFF2E0A0A);
-        accentColor = const Color(0xFFFF6B6B);
+        bgColor = colors.errorContainer;
+        accentColor = colors.error;
+        textColor = colors.onErrorContainer;
         icon = Icons.cancel_rounded;
       case _SnackKind.warning:
-        bgColor = const Color(0xFF2E200A);
-        accentColor = const Color(0xFFFFBB33);
+        bgColor = colors.tertiaryContainer;
+        accentColor = colors.tertiary;
+        textColor = colors.onTertiaryContainer;
         icon = Icons.warning_amber_rounded;
       case _SnackKind.info:
-        bgColor = const Color(0xFF0A1B2E);
-        accentColor = const Color(0xFF60BFFF);
+        bgColor = colors.primaryContainer;
+        accentColor = colors.primary;
+        textColor = colors.onPrimaryContainer;
         icon = Icons.info_rounded;
     }
 
@@ -956,13 +1092,8 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: accentColor.withValues(alpha: 0.18),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-                const BoxShadow(
-                  color: Color(0xCC040A12),
-                  blurRadius: 10,
+                  color: colors.shadow.withValues(alpha: 0.2),
+                  blurRadius: 14,
                   offset: Offset(0, 4),
                 ),
               ],
@@ -975,7 +1106,7 @@ class _HomeScreenState extends State<HomeScreen>
                   child: Text(
                     message,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.92),
+                      color: textColor,
                       fontSize: 13.5,
                       fontWeight: FontWeight.w500,
                       height: 1.35,
@@ -1031,7 +1162,7 @@ class _HomeScreenState extends State<HomeScreen>
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.transparent,
-        title: const Text('PICkit2 Programmer'),
+        title: const Text('PICKit2'),
         centerTitle: true,
       ),
       body: Consumer<HomeController>(
@@ -1207,6 +1338,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildHexTableTab(HomeController controller, {bool desktop = false}) {
+    final colors = Theme.of(context).colorScheme;
     final hasReadData =
         controller.readProgramMemory.isNotEmpty ||
         controller.readEepromMemory.isNotEmpty ||
@@ -1219,16 +1351,19 @@ class _HomeScreenState extends State<HomeScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
+            Text(
               'No data yet.',
-              style: TextStyle(color: Colors.white54, fontSize: 15),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 15),
             ),
             const SizedBox(height: 8),
             Text(
               hasImportedData
                   ? ''
                   : 'Load a firmware file or use Read to read chip memory.',
-              style: const TextStyle(color: Colors.white38, fontSize: 13),
+              style: TextStyle(
+                color: colors.onSurface.withValues(alpha: 0.48),
+                fontSize: 13,
+              ),
             ),
           ],
         ),
@@ -1729,6 +1864,7 @@ class _HexViewerState extends State<_HexViewer> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final prog = _progMem();
     final ee = _eeMem();
     final cfg = _cfgMem();
@@ -1743,9 +1879,9 @@ class _HexViewerState extends State<_HexViewer> with TickerProviderStateMixin {
           margin: const EdgeInsets.only(top: 8),
           child: TabBar(
             controller: _sourceTabController,
-            indicatorColor: Colors.blueAccent,
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white54,
+            indicatorColor: colors.primary,
+            labelColor: colors.onSurface,
+            unselectedLabelColor: colors.onSurfaceVariant,
             indicatorWeight: 3,
             indicatorSize: TabBarIndicatorSize.label,
             labelStyle: const TextStyle(
@@ -1773,9 +1909,9 @@ class _HexViewerState extends State<_HexViewer> with TickerProviderStateMixin {
         // Memory region sub-tabs (Program / EEPROM / Config)
         TabBar(
           controller: _memTabController,
-          indicatorColor: Colors.lightBlueAccent.withValues(alpha: 0.6),
-          labelColor: Colors.lightBlueAccent,
-          unselectedLabelColor: Colors.white38,
+          indicatorColor: colors.primary,
+          labelColor: colors.primary,
+          unselectedLabelColor: colors.onSurfaceVariant,
           indicatorWeight: 2,
           indicatorSize: TabBarIndicatorSize.label,
           labelStyle: const TextStyle(fontSize: 12),
@@ -1812,13 +1948,13 @@ class _HexViewerState extends State<_HexViewer> with TickerProviderStateMixin {
                 width: widget.desktop ? 168 : double.infinity,
                 child: FilledButton.icon(
                   onPressed: widget.onSaveRead,
-                  icon: const Icon(Icons.save, color: Colors.white, size: 18),
-                  label: const Text(
+                  icon: Icon(Icons.save, color: colors.onPrimary, size: 18),
+                  label: Text(
                     'Save Read HEX',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: colors.onPrimary),
                   ),
                   style: FilledButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
+                    backgroundColor: colors.primary,
                     padding: EdgeInsets.symmetric(
                       vertical: widget.desktop ? 10 : 14,
                     ),
@@ -1837,16 +1973,17 @@ class _HexViewerState extends State<_HexViewer> with TickerProviderStateMixin {
   }
 
   Widget _buildMemSection(List<int> data, String title, int baseAddr) {
+    final colors = Theme.of(context).colorScheme;
     if (data.isEmpty) {
       return Center(
         child: Text(
           'No $title data',
-          style: const TextStyle(color: Colors.white54),
+          style: TextStyle(color: colors.onSurfaceVariant),
         ),
       );
     }
 
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1855,14 +1992,16 @@ class _HexViewerState extends State<_HexViewer> with TickerProviderStateMixin {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
               '$title (${data.length} bytes)',
-              style: const TextStyle(
-                color: Colors.lightBlueAccent,
+              style: TextStyle(
+                color: colors.primary,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          HexTableView(data: data, baseAddress: baseAddr),
+          Expanded(
+            child: HexTableView(data: data, baseAddress: baseAddr),
+          ),
         ],
       ),
     );

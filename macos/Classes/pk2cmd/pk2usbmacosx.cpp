@@ -246,8 +246,20 @@ static struct deviceRecord *buildDeviceRecord(io_object_t hidDevice)
 
 static void getPK2UnitID(io_object_t usbDevice)
 {
+	CFMutableDictionaryRef properties = 0;
 	PK2UnitIDString[0] = 0;
-	buildDeviceRecord(usbDevice);
+	if (IORegistryEntryCreateCFProperties(usbDevice, &properties,
+		kCFAllocatorDefault, kNilOptions) == kIOReturnSuccess && properties)
+	{
+		CFTypeRef serial = CFDictionaryGetValue(properties,
+			CFSTR(kIOHIDSerialNumberKey));
+		if (serial && CFGetTypeID(serial) == CFStringGetTypeID())
+		{
+			CFStringGetCString((CFStringRef)serial, PK2UnitIDString,
+				sizeof(PK2UnitIDString), kCFStringEncodingUTF8);
+		}
+		CFRelease(properties);
+	}
 }
 
 static IOHIDDeviceInterface122 **find_device(SInt32 vendor, SInt32 product, int unit)
@@ -403,21 +415,26 @@ static void interrupt_report_callback_func(void *target,
 		printf("Warning: previous report has not been read.\n");
 
 	rep->size_received = size;
-	CFRunLoopStop(CFRunLoopGetCurrent());
+	if (rep->run_loop)
+		CFRunLoopStop(rep->run_loop);
 }
 
-static void setup_notification(hidreport_t rep)
+static bool setup_notification(hidreport_t rep)
 {
 	IOReturn		r;
-	mach_port_t	port;
-	CFRunLoopSourceRef	es;
 
 	IOHIDDeviceInterface122 **devif;
 	devif = rep->intf;
 	rep->size_received = 0;
 	r = (*devif)->open(devif, 0);
-	r = (*devif)->createAsyncPort(devif, &port);
-	r = (*devif)->createAsyncEventSource(devif, &es);
+	if (r != kIOReturnSuccess)
+		return false;
+	r = (*devif)->createAsyncPort(devif, &rep->async_port);
+	if (r != kIOReturnSuccess)
+		return false;
+	r = (*devif)->createAsyncEventSource(devif, &rep->run_loop_source);
+	if (r != kIOReturnSuccess || !rep->run_loop_source)
+		return false;
 	r = (*devif)->setInterruptReportHandlerCallback(
 		devif,
 		rep->buffer,
@@ -426,7 +443,13 @@ static void setup_notification(hidreport_t rep)
 		rep,
 		0
 		);
-	CFRunLoopAddSource(CFRunLoopGetCurrent(), es, kCFRunLoopDefaultMode);
+	if (r != kIOReturnSuccess)
+		return false;
+	rep->run_loop = CFRunLoopGetCurrent();
+	CFRetain(rep->run_loop);
+	CFRunLoopAddSource(rep->run_loop, rep->run_loop_source,
+		kCFRunLoopDefaultMode);
+	return true;
 }
 
 /*
@@ -446,24 +469,47 @@ hidreport_t hidreport_open(int vendor_id, int product_id, int report_size, int u
 	if ((rep = (hidreport_t) malloc(sizeof(struct hidreport))) == NULL)
 		return NULL;
 
+	bzero(rep, sizeof(struct hidreport));
 	rep->intf = intf;
 
 	if ((rep->buffer = (char *) malloc(report_size)) == NULL)
+	{
+		(*intf)->Release(intf);
+		free(rep);
 		return NULL;
+	}
 
 	rep->size = report_size;
 	rep->size_received = 0;
-	rep->timeout = 500;			// timeout in ms
-	setup_notification(rep);
+	rep->timeout = 2000;			// timeout in ms
+	if (!setup_notification(rep))
+	{
+		hidreport_close(rep);
+		return NULL;
+	}
 	return rep;
 }
 
 void hidreport_close(hidreport_t rep)
 {
-	(*rep->intf)->close(rep->intf);
+	if (!rep)
+		return;
+	if (rep->run_loop && rep->run_loop_source)
+		CFRunLoopRemoveSource(rep->run_loop, rep->run_loop_source,
+			kCFRunLoopDefaultMode);
+	if (rep->run_loop_source)
+		CFRelease(rep->run_loop_source);
+	if (rep->run_loop)
+		CFRelease(rep->run_loop);
+	if (rep->async_port != MACH_PORT_NULL)
+		mach_port_deallocate(mach_task_self(), rep->async_port);
+	if (rep->intf)
+	{
+		(*rep->intf)->close(rep->intf);
+		(*rep->intf)->Release(rep->intf);
+	}
 	free(rep->buffer);
 	free(rep);
-	rep = NULL;
 }
 
 int hidreport_send(hidreport_t rep, void *buf, int size)
@@ -478,8 +524,17 @@ int hidreport_send(hidreport_t rep, void *buf, int size)
 
 int hidreport_receive(hidreport_t rep, void *buf, UInt32 *size)
 {
+	CFAbsoluteTime deadline = CFAbsoluteTimeGetCurrent()
+		+ ((double)rep->timeout / 1000.0);
 	while (rep->size_received == 0)
-		CFRunLoopRun();
+	{
+		CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.05, true);
+		if (CFAbsoluteTimeGetCurrent() >= deadline)
+		{
+			*size = 0;
+			return kIOReturnTimeout;
+		}
+	}
 
 	memcpy(buf, rep->buffer, rep->size_received);
 	*size = rep->size_received;
@@ -535,7 +590,9 @@ int sendUSB(pickit_dev *d, byte *src, int len)
 		fflush(usbFile);
 	}
 
-	hidreport_send((hidreport_t) d, buf, REPORT_SIZE);
+	r = hidreport_send((hidreport_t) d, buf, REPORT_SIZE);
+	if (r != kIOReturnSuccess)
+		return 0;
 
 	if (rescan)		// Microchip code entered/exited bootloader,
 		deviceHandle = NULL;	// so reset the device handle
@@ -555,7 +612,9 @@ int recvUSB(pickit_dev *d, int len, byte *dest)
 	while (i < len)
 	{
 		bzero(buf, REPORT_SIZE + 1);
-		hidreport_receive((hidreport_t) d, buf, (UInt32 *) &size);
+		if (hidreport_receive((hidreport_t) d, buf, (UInt32 *) &size)
+			!= kIOReturnSuccess || size <= 0)
+			return 0;
 
 		for (j=0; j<size && i<len; j++)
 			dest[i++] = buf[j];
