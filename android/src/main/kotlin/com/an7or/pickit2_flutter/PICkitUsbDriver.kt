@@ -53,9 +53,15 @@ class PICkitUsbDriver(private val context: Context) {
   private val SCR_PROGMEM_RD = 4
   private val SCR_ERASE_CHIP_PREP = 5
   private val SCR_PROGMEM_ADDRSET = 6
-  private val SCR_ERASE_CHIP = 22
+  private val SCR_PROGMEM_WR_PREP = 7
+  private val SCR_PROGMEM_WR = 8
   private val SCR_EE_RD = 9
+  private val SCR_EE_WR_PREP = 10
+  private val SCR_EE_WR = 11
   private val SCR_CONFIG_RD = 13
+  private val SCR_CONFIG_WR_PREP = 14
+  private val SCR_CONFIG_WR = 15
+  private val SCR_ERASE_CHIP = 22
 
   interface UsbCallback {
     fun onConnectionSuccess()
@@ -626,5 +632,355 @@ class PICkitUsbDriver(private val context: Context) {
       ((address shr 16) and 0xFF).toByte(),
     )
     write64(cmd)
+  }
+
+  // ── Firmware Write (Microchip Standard Flow) ─────────────────────────────
+
+  fun writeFirmware(
+    catalog: ChipCatalog,
+    partInfo: Map<String, Any>,
+    image: ProgramImage,
+    skipBlankCheck: Boolean = false,
+    progressCallback: ((phase: String, percent: Int, message: String) -> Unit)? = null,
+  ): Boolean {
+    if (connection == null || endpointIn == null || endpointOut == null) {
+      throw IllegalStateException("PICkit 2 is not connected.")
+    }
+    if (image.isEmpty()) {
+      throw IllegalStateException("No firmware image loaded.")
+    }
+
+    val family = catalog.detectFamilyOrder().firstOrNull { f ->
+      catalog.findPartByFamilyAndDeviceId(f.familyId, 0) != null // approximate
+    } ?: throw IllegalStateException("No auto-detectable family found.")
+
+    val blankValue = family.blankValue.takeIf { it in 0..0xFFFF } ?: 0x3FFF
+    val bytesPerWord = family.bytesPerLocation.takeIf { it in 1..4 } ?: 2
+    val progMemSize = (partInfo["flashSize"] as? String)?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+    val eeSize = (partInfo["eepromSize"] as? String)?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+    val configWords = partInfo["configWords"] as? Int ?: 0
+    val eeMemBytesPerWord = family.eeMemBytesPerWord.takeIf { it in 1..4 } ?: 1
+
+    setProgrammingSpeed(1)
+    setVddVoltage(3.3, 0.85)
+    setVppVoltage(3.3, 0.7)
+    setMclr(true)
+    vddOn()
+    Thread.sleep(50)
+
+    try {
+      // ── Step 0: Enter programming mode ──
+      progressCallback?.invoke("setup", 2, "Entering programming mode…")
+      executeScriptByNumber(catalog, SCR_PROG_ENTRY)
+
+      // ── Step 1: Erase ──
+      progressCallback?.invoke("erase", 5, "Erasing chip…")
+      val erasePrepScript = catalog.scriptByNumber(SCR_ERASE_CHIP_PREP)?.script
+      if (erasePrepScript != null) {
+        executeScriptBytes(erasePrepScript)
+      }
+      val chipEraseScript = catalog.scriptByNumber(SCR_ERASE_CHIP)?.script
+      if (chipEraseScript != null) {
+        executeScriptBytes(chipEraseScript)
+      }
+      // Some devices need a pause after erase
+      Thread.sleep(100)
+
+      // ── Step 2: Blank Check (unless skipped) ──
+      if (!skipBlankCheck) {
+        progressCallback?.invoke("blankCheck", 10, "Blank checking…")
+        val blankOk = blankCheckProgramMemory(catalog, partInfo, blankValue, bytesPerWord, progMemSize)
+        if (!blankOk) {
+          progressCallback?.invoke("error", 10, "Blank check failed – chip is not blank after erase")
+          executeScriptByNumber(catalog, SCR_PROG_EXIT)
+          return false
+        }
+        progressCallback?.invoke("blankCheck", 15, "Blank check passed")
+      } else {
+        progressCallback?.invoke("blankCheck", 15, "Blank check skipped")
+      }
+
+      // ── Step 3: Write Program Memory ──
+      progressCallback?.invoke("writeProg", 20, "Writing program memory…")
+      val progWriteBytes = writeProgramMemory(catalog, partInfo, image, bytesPerWord, blankValue) { addrPct ->
+        val pct = 20 + (addrPct * 50 / 100)
+        progressCallback?.invoke("writeProg", pct, "Writing program memory ${addrPct}%…")
+      }
+
+      // ── Step 4: Write EEPROM ──
+      if (eeSize > 0 && image.minAddress() <= 0x2100) {
+        progressCallback?.invoke("writeEE", 70, "Writing EEPROM…")
+        writeEepromMemory(catalog, partInfo, image, eeMemBytesPerWord)
+      }
+
+      // ── Step 5: Write Config Words ──
+      if (configWords > 0) {
+        progressCallback?.invoke("writeConfig", 75, "Writing config words…")
+        writeConfigMemory(catalog, image)
+      }
+
+      // ── Step 6: Verify ──
+      progressCallback?.invoke("verify", 80, "Verifying…")
+      val verifyOk = verifyProgramMemory(catalog, partInfo, image, bytesPerWord, blankValue) { addrPct ->
+        val pct = 80 + (addrPct * 18 / 100)
+        progressCallback?.invoke("verify", pct, "Verifying ${addrPct}%…")
+      }
+
+      if (!verifyOk) {
+        progressCallback?.invoke("error", 98, "Verification failed – data mismatch")
+        executeScriptByNumber(catalog, SCR_PROG_EXIT)
+        return false
+      }
+
+      progressCallback?.invoke("done", 100, "Firmware written and verified successfully")
+      executeScriptByNumber(catalog, SCR_PROG_EXIT)
+      return true
+    } catch (e: Exception) {
+      progressCallback?.invoke("error", 0, "Write failed: ${e.message}")
+      runCatching {
+        executeScriptByNumber(catalog, SCR_PROG_EXIT)
+      }
+      throw e
+    } finally {
+      vddOff()
+      setMclr(false)
+    }
+  }
+
+  private fun blankCheckProgramMemory(
+    catalog: ChipCatalog,
+    partInfo: Map<String, Any>,
+    blankValue: Int,
+    bytesPerWord: Int,
+    progMemSize: Int,
+  ): Boolean {
+    if (progMemSize <= 0) return true
+
+    val bytesPerLoc = bytesPerWord.coerceIn(1, 4)
+    val blankByte = blankValue and 0xFF
+    val totalBytes = progMemSize * bytesPerLoc
+    val readChunk = 64
+    var offset = 0
+
+    while (offset < totalBytes && offset < 8192) {
+      downloadAddress3(offset)
+      executeScriptByNumber(catalog, SCR_PROGMEM_RD)
+      val upload = uploadData()
+
+      for (i in upload.indices) {
+        if (u8(upload[i]) != blankByte) {
+          Log.w(TAG, "Blank check failed at offset ${offset + i}: expected $blankByte, got ${u8(upload[i])}")
+          return false
+        }
+      }
+
+      offset += readChunk
+    }
+
+    return true
+  }
+
+  private fun writeProgramMemory(
+    catalog: ChipCatalog,
+    partInfo: Map<String, Any>,
+    image: ProgramImage,
+    bytesPerWord: Int,
+    blankValue: Int,
+    progress: ((pct: Int) -> Unit)? = null,
+  ): Int {
+    val bytesPerLoc = bytesPerWord.coerceIn(1, 4)
+    val progMemSize = (partInfo["flashSize"] as? String)?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+    if (progMemSize <= 0) return 0
+
+    val maxAddr = image.maxAddress()
+    val minAddr = image.minAddress()
+    val maxWritable = maxAddr.coerceAtMost(progMemSize * bytesPerLoc - 1)
+    val totalBytesToWrite = (maxWritable - minAddr + 1).coerceAtLeast(0)
+
+    if (totalBytesToWrite <= 0) return 0
+
+    var bytesWritten = 0
+    val downloadChunk = 32 // must be multiple of bytesPerLoc for word alignment
+
+    // Collect non-blank sections to write
+    val sections = mutableListOf<Pair<Int, Int>>() // (startByte, length)
+    var sectionStart = -1
+    var currentLen = 0
+
+    for (addr in minAddr..maxWritable) {
+      val byteVal = image.getByte(addr) ?: (blankValue and 0xFF)
+      if (byteVal != (blankValue and 0xFF)) {
+        if (sectionStart < 0) sectionStart = addr
+        currentLen++
+      } else {
+        if (sectionStart >= 0) {
+          sections.add(sectionStart to currentLen)
+        }
+        sectionStart = -1
+        currentLen = 0
+      }
+    }
+    if (sectionStart >= 0) {
+      sections.add(sectionStart to currentLen)
+    }
+
+    if (sections.isEmpty()) {
+      progress?.invoke(100)
+      return 0
+    }
+
+    for ((startAddr, length) in sections) {
+      val alignedStart = (startAddr / bytesPerLoc) * bytesPerLoc
+      val endAddr = startAddr + length
+      val alignedEnd = ((endAddr + bytesPerLoc - 1) / bytesPerLoc) * bytesPerLoc
+      val alignedLength = alignedEnd - alignedStart
+
+      var pos = alignedStart
+      while (pos < alignedEnd) {
+        val chunkLen = minOf(alignedEnd - pos, downloadChunk)
+        // Align to bytesPerLoc
+        val writeLen = (chunkLen / bytesPerLoc) * bytesPerLoc
+        if (writeLen <= 0) break
+
+        // Build the data buffer for this chunk
+        val dataBytes = ByteArray(writeLen)
+
+        // Determine the word address
+        val wordAddr = pos / bytesPerLoc
+
+        // Set address
+        executeScriptByNumber(catalog, SCR_PROGMEM_ADDRSET)
+        downloadAddress3(wordAddr * bytesPerLoc)
+        // For MSB1st families, we may need to use alternative address setting
+        // downloadAddress3MSBFirst(wordAddr) if needed
+
+        // Fill data bytes from image
+        for (i in 0 until writeLen) {
+          val byteAddr = pos + i
+          val byteVal = image.getByte(byteAddr) ?: (blankValue and 0xFF)
+          dataBytes[i] = byteVal.toByte()
+        }
+
+        // Download data to PICkit2 buffer
+        clearDownloadBuffer()
+        downloadData(dataBytes)
+
+        // Execute write script
+        executeScriptByNumber(catalog, SCR_PROGMEM_WR_PREP)
+        executeScriptByNumber(catalog, SCR_PROGMEM_WR)
+
+        bytesWritten += writeLen
+        pos += writeLen
+
+        val pct = if (totalBytesToWrite > 0) (bytesWritten * 100 / totalBytesToWrite).coerceIn(0, 100) else 0
+        progress?.invoke(pct)
+      }
+    }
+
+    progress?.invoke(100)
+    return bytesWritten
+  }
+
+  private fun writeEepromMemory(
+    catalog: ChipCatalog,
+    partInfo: Map<String, Any>,
+    image: ProgramImage,
+    eeBytesPerWord: Int,
+  ) {
+    val eeSize = (partInfo["eepromSize"] as? String)?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+    if (eeSize <= 0) return
+
+    val eeAddr = partInfo["eeAddr"] as? Int ?: 0
+    // EEPROM typically starts at device-specific address; we write byte-by-byte for simplicity
+    for (i in 0 until minOf(eeSize, 2048)) {
+      val byteAddr = eeAddr + i
+      val byteVal = image.getByte(byteAddr) ?: continue
+
+      downloadAddress3(byteAddr)
+      val data = byteArrayOf(byteVal.toByte())
+      clearDownloadBuffer()
+      downloadData(data)
+      executeScriptByNumber(catalog, SCR_EE_WR_PREP)
+      executeScriptByNumber(catalog, SCR_EE_WR)
+    }
+  }
+
+  private fun writeConfigMemory(catalog: ChipCatalog, image: ProgramImage) {
+    val configStartAddr = 0x300000 // Typical config address region
+    for (offset in 0 until 16) {
+      val addr = configStartAddr + offset * 2
+      val hi = image.getByte(addr) ?: continue
+      val lo = image.getByte(addr + 1) ?: continue
+
+      val data = byteArrayOf(lo.toByte(), hi.toByte())
+      clearDownloadBuffer()
+      downloadData(data)
+      executeScriptByNumber(catalog, SCR_CONFIG_WR_PREP)
+      executeScriptByNumber(catalog, SCR_CONFIG_WR)
+    }
+  }
+
+  private fun verifyProgramMemory(
+    catalog: ChipCatalog,
+    partInfo: Map<String, Any>,
+    image: ProgramImage,
+    bytesPerWord: Int,
+    blankValue: Int,
+    progress: ((pct: Int) -> Unit)? = null,
+  ): Boolean {
+    val bytesPerLoc = bytesPerWord.coerceIn(1, 4)
+    val progMemSize = (partInfo["flashSize"] as? String)?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+    if (progMemSize <= 0) return true
+
+    val maxAddr = image.maxAddress()
+    val minAddr = image.minAddress()
+    val maxVerifiable = maxAddr.coerceAtMost(progMemSize * bytesPerLoc - 1)
+    val totalBytes = (maxVerifiable - minAddr + 1).coerceAtLeast(0)
+
+    if (totalBytes <= 0) return true
+
+    var bytesChecked = 0
+    val readChunk = 64
+    var offset = minAddr
+
+    while (offset <= maxVerifiable) {
+      downloadAddress3(offset)
+      executeScriptByNumber(catalog, SCR_PROGMEM_RD)
+      val upload = uploadData()
+
+      for (i in upload.indices) {
+        val byteAddr = offset + i
+        if (byteAddr > maxVerifiable) break
+        val expected = image.getByte(byteAddr) ?: (blankValue and 0xFF)
+        val actual = u8(upload[i])
+        if (expected != actual) {
+          Log.w(TAG, "Verify failed at offset $byteAddr: expected $expected, got $actual")
+          return false
+        }
+        bytesChecked++
+      }
+
+      offset += readChunk
+      val pct = if (totalBytes > 0) (bytesChecked * 100 / totalBytes).coerceIn(0, 100) else 0
+      progress?.invoke(pct)
+    }
+
+    progress?.invoke(100)
+    return true
+  }
+
+  private fun clearDownloadBuffer() {
+    write64(byteArrayOf(cmdClrDownloadBuffer.toByte()))
+  }
+
+  private fun downloadData(data: ByteArray) {
+    val cmd = ByteArray(minOf(data.size, 62) + 2)
+    cmd[0] = cmdDownloadData.toByte()
+    cmd[1] = minOf(data.size, 62).toByte()
+    System.arraycopy(data, 0, cmd, 2, minOf(data.size, 62))
+    write64(cmd)
+
+    // Signal end of buffer
+    write64(byteArrayOf(cmdEndOfBuffer.toByte()))
   }
 }

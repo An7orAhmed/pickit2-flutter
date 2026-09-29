@@ -80,6 +80,22 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
       "getLoadedImageInfo" -> {
         result.success(loadedImage.summary())
       }
+      "getLoadedImageData" -> {
+        // Returns the full loaded image as [address1, value1, address2, value2, ...]
+        val bytes = loadedImage.getBytes()
+        val flat = mutableListOf<Int>()
+        for ((addr, value) in bytes) {
+          flat.add(addr)
+          flat.add(value)
+        }
+        result.success(mapOf(
+          "sourceType" to (loadedImage.summary()["sourceType"] ?: ""),
+          "loadedBytes" to loadedImage.size(),
+          "minAddress" to loadedImage.minAddress(),
+          "maxAddress" to loadedImage.maxAddress(),
+          "data" to flat,
+        ))
+      }
       "loadChipData", "loadChipDataFromDat" -> {
         runAsync(result, "CHIP_DATA_ERROR") {
           val catalogPath = call.argument<String>("catalogPath")
@@ -207,6 +223,38 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
           result.success(usbDriver?.getFirmwareVersion())
         } catch (e: Exception) {
           result.error("FW_VERSION_ERROR", e.message, null)
+        }
+      }
+      "writeFirmware" -> {
+        if (!chipCatalog.isLoaded()) {
+          result.error("CHIP_DATA_NOT_LOADED", "Load chip data first using loadChipData", null)
+        } else if (selectedPartInfo.isEmpty()) {
+          result.error("NO_CHIP_SELECTED", "Select a target chip first", null)
+        } else if (!loadedImage.isEmpty()) {
+          // Use the already-loaded image; write with progress callbacks
+          runAsync(result, "WRITE_ERROR") {
+            val totalSteps = 6
+            var lastProgress = 0
+            val success = usbDriver?.writeFirmware(
+              catalog = chipCatalog,
+              partInfo = selectedPartInfo,
+              image = loadedImage,
+              skipBlankCheck = false,
+              progressCallback = { phase, percent, message ->
+                lastProgress = percent
+                mainHandler.post {
+                  channel.invokeMethod("onWriteProgress", mapOf(
+                    "phase" to phase,
+                    "percent" to percent,
+                    "message" to message,
+                  ))
+                }
+              },
+            ) ?: throw IllegalStateException("USB driver is unavailable")
+            mapOf("success" to success, "message" to if (success) "Write complete" else "Write failed")
+          }
+        } else {
+          result.error("NO_IMAGE", "Load a firmware file first", null)
         }
       }
       else -> result.notImplemented()

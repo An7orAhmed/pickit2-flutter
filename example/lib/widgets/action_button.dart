@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class ActionButton extends StatefulWidget {
   final IconData icon;
@@ -7,13 +6,20 @@ class ActionButton extends StatefulWidget {
   final bool enabled;
   final VoidCallback? onTap;
 
-  const ActionButton({super.key, required this.icon, required this.label, required this.enabled, this.onTap});
+  const ActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.enabled,
+    this.onTap,
+  });
 
   @override
   State<ActionButton> createState() => _ActionButtonState();
 }
 
-class _ActionButtonState extends State<ActionButton> with SingleTickerProviderStateMixin {
+class _ActionButtonState extends State<ActionButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _scaleController;
   late Animation<double> _scaleAnim;
   bool _hovering = false;
@@ -26,7 +32,10 @@ class _ActionButtonState extends State<ActionButton> with SingleTickerProviderSt
       duration: const Duration(milliseconds: 110),
       reverseDuration: const Duration(milliseconds: 180),
     );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.92).animate(CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
+    _scaleAnim = Tween<double>(
+      begin: 1.0,
+      end: 0.92,
+    ).animate(CurvedAnimation(parent: _scaleController, curve: Curves.easeOut));
   }
 
   @override
@@ -53,20 +62,32 @@ class _ActionButtonState extends State<ActionButton> with SingleTickerProviderSt
           child: MouseRegion(
             onEnter: (_) => setState(() => _hovering = true),
             onExit: (_) => setState(() => _hovering = false),
-            cursor: widget.enabled ? SystemMouseCursors.click : SystemMouseCursors.forbidden,
+            cursor: widget.enabled
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.forbidden,
             child: ScaleTransition(
               scale: _scaleAnim,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
                 curve: Curves.easeOut,
                 decoration: BoxDecoration(
-                  color: _hovering && widget.enabled ? const Color(0xFF1C2E47) : const Color(0xFF111B2D),
+                  color: _hovering && widget.enabled
+                      ? const Color(0xFF1C2E47)
+                      : const Color(0xFF111B2D),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: _hovering && widget.enabled ? Colors.blueAccent.withValues(alpha: 0.45) : Colors.white.withValues(alpha: 0.04),
+                    color: _hovering && widget.enabled
+                        ? Colors.blueAccent.withValues(alpha: 0.45)
+                        : Colors.white.withValues(alpha: 0.04),
                   ),
                   boxShadow: _hovering && widget.enabled
-                      ? [const BoxShadow(color: Color(0x331B6FFF), blurRadius: 14, offset: Offset(0, 6))]
+                      ? [
+                          const BoxShadow(
+                            color: Color(0x331B6FFF),
+                            blurRadius: 14,
+                            offset: Offset(0, 6),
+                          ),
+                        ]
                       : null,
                 ),
                 child: Material(
@@ -86,10 +107,12 @@ class _ActionButtonState extends State<ActionButton> with SingleTickerProviderSt
                         children: [
                           AnimatedSwitcher(
                             duration: const Duration(milliseconds: 200),
-                            child: FaIcon(
+                            child: Icon(
                               widget.icon,
                               key: ValueKey(widget.enabled),
-                              color: widget.enabled ? Colors.blueAccent : Colors.white38,
+                              color: widget.enabled
+                                  ? Colors.blueAccent
+                                  : Colors.white38,
                               size: 20,
                             ),
                           ),
@@ -97,9 +120,13 @@ class _ActionButtonState extends State<ActionButton> with SingleTickerProviderSt
                           Text(
                             widget.label,
                             style: TextStyle(
-                              color: widget.enabled ? Colors.white70 : Colors.white38,
+                              color: widget.enabled
+                                  ? Colors.white70
+                                  : Colors.white38,
                               fontSize: 13,
-                              fontWeight: widget.enabled ? FontWeight.w600 : FontWeight.normal,
+                              fontWeight: widget.enabled
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
                             ),
                           ),
                         ],
