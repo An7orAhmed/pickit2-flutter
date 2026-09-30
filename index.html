@@ -41,6 +41,7 @@
         },
       };
     </script>
+    <script>document.documentElement.classList.add("js");</script>
     <style>
       :root {
         color-scheme: light;
@@ -65,15 +66,75 @@
       }
 
       .screen-back {
-        transform: rotate(-2.2deg) translate(-2%, 1%);
+        --screen-rotation: -2.2deg;
+        --screen-offset-x: -2%;
+        --screen-offset-y: 1%;
+        transform: rotate(var(--screen-rotation)) translate(var(--screen-offset-x), var(--screen-offset-y));
+        animation: screen-arrive 850ms cubic-bezier(0.2, 0.7, 0.2, 1) 100ms both;
       }
 
       .screen-front {
-        transform: rotate(1.4deg) translate(1%, -2%);
+        --screen-rotation: 1.4deg;
+        --screen-offset-x: 1%;
+        --screen-offset-y: -2%;
+        transform: rotate(var(--screen-rotation)) translate(var(--screen-offset-x), var(--screen-offset-y));
+        animation: screen-arrive 850ms cubic-bezier(0.2, 0.7, 0.2, 1) 240ms both;
       }
 
       .reveal {
         animation: arrive 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      }
+
+      .js .feature-item {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      .js .feature-item.is-visible {
+        animation: arrive 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      }
+
+      .js .feature-item:nth-child(2).is-visible { animation-delay: 60ms; }
+      .js .feature-item:nth-child(3).is-visible { animation-delay: 120ms; }
+      .js .feature-item:nth-child(4).is-visible { animation-delay: 180ms; }
+      .js .feature-item:nth-child(5).is-visible { animation-delay: 240ms; }
+      .js .feature-item:nth-child(6).is-visible { animation-delay: 300ms; }
+
+      .chip-art {
+        position: relative;
+        display: grid;
+        width: 112px;
+        height: 112px;
+        flex: none;
+        place-items: center;
+        color: #9fc5ff;
+        background:
+          repeating-linear-gradient(90deg, transparent 0 11px, rgba(159, 197, 255, 0.7) 11px 13px, transparent 13px 24px) center / 100% 12px no-repeat,
+          repeating-linear-gradient(0deg, transparent 0 11px, rgba(159, 197, 255, 0.7) 11px 13px, transparent 13px 24px) center / 12px 100% no-repeat;
+      }
+
+      .chip-art::before {
+        position: absolute;
+        inset: 19px;
+        border: 1px solid rgba(159, 197, 255, 0.7);
+        background: linear-gradient(145deg, #223957, #14243a);
+        box-shadow: inset 0 0 0 5px rgba(159, 197, 255, 0.06);
+        content: "";
+      }
+
+      .chip-art-core {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .chip-art-core span {
+        font-family: "DM Mono", monospace;
+        font-size: 9px;
+        line-height: 1;
       }
 
       @keyframes arrive {
@@ -84,6 +145,17 @@
         to {
           opacity: 1;
           transform: translateY(0);
+        }
+      }
+
+      @keyframes screen-arrive {
+        from {
+          opacity: 0;
+          transform: rotate(var(--screen-rotation)) translate(var(--screen-offset-x), calc(var(--screen-offset-y) + 18px));
+        }
+        to {
+          opacity: 1;
+          transform: rotate(var(--screen-rotation)) translate(var(--screen-offset-x), var(--screen-offset-y));
         }
       }
 
@@ -100,11 +172,15 @@
 
       @media (max-width: 640px) {
         .screen-back {
-          transform: rotate(-2deg) translate(-1%, 2%);
+          --screen-rotation: -2deg;
+          --screen-offset-x: -1%;
+          --screen-offset-y: 2%;
         }
 
         .screen-front {
-          transform: rotate(1deg) translate(1%, -1%);
+          --screen-rotation: 1deg;
+          --screen-offset-x: 1%;
+          --screen-offset-y: -1%;
         }
       }
     </style>
@@ -121,10 +197,13 @@
         <a class="transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-signal" href="#android">Android</a>
       </nav>
       <a
-        href="#features"
-        class="rounded-md bg-ink px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-signal focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-signal"
+        href="https://github.com/An7orAhmed/pickit2-flutter/releases/download/V1.0.0/PICKit2-macOS-v1.0.0.dmg"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="rounded-md bg-signal px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-signal"
       >
-        Explore the app
+        <i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>
+        Download v1.0.0
       </a>
     </header>
 
@@ -133,31 +212,35 @@
         <div class="reveal relative z-10 max-w-xl">
           <p class="mb-6 inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-semibold text-muted shadow-sm">
             <span class="h-2 w-2 rounded-full bg-hardware"></span>
-            A desktop programmer for PICkit 2
+            PICKit2 desktop app / Version 1.0.0
           </p>
           <h1 class="max-w-[12ch] text-5xl font-bold leading-[1.02] sm:text-6xl lg:text-[4.5rem]">
-            PICKit2, from firmware to <span class="text-signal">verified.</span>
+            Program PIC devices. Verify every step.
           </h1>
           <p class="mt-6 max-w-lg text-lg leading-8 text-muted">
             A focused macOS workspace for programming PIC devices. Choose a target, load your image, run the operation, and inspect memory without leaving the app.
           </p>
           <div class="mt-8 flex flex-wrap items-center gap-3">
-            <a href="#features" class="inline-flex min-h-12 items-center justify-center rounded-md bg-signal px-5 text-sm font-bold text-white shadow-lg shadow-blue-900/10 transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink">
-              See what it can do
+            <a href="https://github.com/An7orAhmed/pickit2-flutter/releases/download/V1.0.0/PICKit2-macOS-v1.0.0.dmg" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-signal px-5 text-sm font-bold text-white shadow-lg shadow-blue-900/10 transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink">
+              <i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>
+              Download for macOS
             </a>
-            <a href="#screens" class="inline-flex min-h-12 items-center justify-center rounded-md border border-line bg-white px-5 text-sm font-bold text-ink transition-colors hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-signal">
-              View the interface
+            <a href="#features" class="inline-flex min-h-12 items-center justify-center rounded-md border border-line bg-white px-5 text-sm font-bold text-ink transition-colors hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-signal">
+              Explore features
             </a>
           </div>
-          <div class="mt-10 flex flex-wrap gap-x-6 gap-y-3 border-t border-line pt-5 text-xs font-medium text-muted">
-            <span class="font-mono">macOS desktop</span>
+          <p class="mt-4 max-w-lg text-xs leading-5 text-muted">
+            Universal build for Apple silicon and Intel. Requires macOS 12 or later. This release is not notarized; first launch may require Control-clicking PICKit2 and choosing Open.
+          </p>
+          <div class="mt-8 flex flex-wrap gap-x-6 gap-y-3 border-t border-line pt-5 text-xs font-medium text-muted">
+            <span class="font-mono">macOS 12+</span>
+            <span class="font-mono">Apple silicon + Intel</span>
             <span class="font-mono">HEX + BIN</span>
-            <span class="font-mono">PICkit 2 hardware</span>
           </div>
         </div>
 
-        <div class="blueprint-grid relative mx-auto flex min-h-[310px] w-full max-w-[700px] items-center justify-center overflow-hidden rounded-2xl border border-line px-5 py-10 sm:min-h-[430px] sm:px-10 lg:min-h-[520px] lg:overflow-visible">
-          <div class="absolute left-5 top-5 flex items-center gap-2 font-mono text-[10px] uppercase text-muted sm:left-8 sm:top-8">
+        <div id="screens" aria-label="PICKit2 screenshots in light and dark themes" class="blueprint-grid relative mx-auto flex min-h-[310px] w-full max-w-[700px] items-center justify-center overflow-hidden rounded-2xl border border-line px-5 py-10 sm:min-h-[430px] sm:px-10 lg:min-h-[520px] lg:overflow-visible">
+          <div class="absolute left-5 top-5 flex items-center gap-2 text-xs font-semibold text-muted sm:left-8 sm:top-8">
             <span class="h-2 w-2 rounded-full bg-brass"></span>
             One workspace. Every step.
           </div>
@@ -169,22 +252,22 @@
             <img src="./images/mac-ui-dark.png" alt="PICKit2 desktop app in dark theme with no firmware loaded" class="block h-auto w-full" />
             <figcaption class="sr-only">Dark theme with target selection, firmware actions, and connection state.</figcaption>
           </figure>
-          <span class="absolute bottom-5 left-5 z-20 rounded-sm bg-ink px-2.5 py-1.5 font-mono text-[10px] text-white sm:bottom-8 sm:left-8">LIGHT / DARK</span>
+          <span class="absolute bottom-5 left-5 z-20 rounded-sm bg-ink px-2.5 py-1.5 text-xs font-semibold text-white sm:bottom-8 sm:left-8">Light and dark themes</span>
         </div>
       </section>
 
       <section class="border-y border-line bg-white" aria-label="Product summary">
         <div class="mx-auto grid max-w-7xl grid-cols-2 gap-px bg-line px-5 sm:grid-cols-4 sm:px-8 lg:px-12">
-          <div class="bg-white py-5 sm:py-6"><p class="font-mono text-xs text-muted">01 / CONNECT</p><p class="mt-1 font-semibold">PICkit 2 status</p></div>
-          <div class="bg-white py-5 sm:py-6"><p class="font-mono text-xs text-muted">02 / SELECT</p><p class="mt-1 font-semibold">Catalog + auto-detect</p></div>
-          <div class="bg-white py-5 sm:py-6"><p class="font-mono text-xs text-muted">03 / PROGRAM</p><p class="mt-1 font-semibold">Progress + verify</p></div>
-          <div class="bg-white py-5 sm:py-6"><p class="font-mono text-xs text-muted">04 / INSPECT</p><p class="mt-1 font-semibold">Memory + HEX export</p></div>
+          <div class="bg-white py-5 sm:py-6"><p class="text-xs text-muted">Connect</p><p class="mt-1 font-semibold">PICkit 2 status</p></div>
+          <div class="bg-white py-5 sm:py-6"><p class="text-xs text-muted">Select</p><p class="mt-1 font-semibold">Catalog + auto-detect</p></div>
+          <div class="bg-white py-5 sm:py-6"><p class="text-xs text-muted">Program</p><p class="mt-1 font-semibold">Progress + verify</p></div>
+          <div class="bg-white py-5 sm:py-6"><p class="text-xs text-muted">Inspect</p><p class="mt-1 font-semibold">Memory + HEX export</p></div>
         </div>
       </section>
 
       <section id="features" class="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28 lg:px-12">
         <div class="grid gap-10 border-b border-line pb-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-end lg:pb-14">
-          <p class="font-mono text-xs text-hardware">BUILT AROUND THE PROGRAMMING SESSION</p>
+          <p class="text-sm font-semibold text-hardware">Built around the programming session</p>
           <div>
             <h2 class="max-w-3xl text-3xl font-bold leading-tight sm:text-5xl">The important tools stay close, from chip selection to memory review.</h2>
             <p class="mt-5 max-w-2xl text-base leading-7 text-muted">PICKit2 brings the everyday PICkit 2 workflow into one clear desktop interface, with device-aware actions and useful feedback at each step.</p>
@@ -192,68 +275,52 @@
         </div>
 
         <div class="grid gap-x-12 md:grid-cols-2">
-          <article class="border-b border-line py-8 sm:py-10">
-            <p class="font-mono text-xs text-signal">TARGET</p>
+          <article class="feature-item border-b border-line py-8 sm:py-10">
+            <p class="flex items-center gap-2 text-sm font-semibold text-signal"><i data-lucide="cpu" class="h-4 w-4" aria-hidden="true"></i>Target selection</p>
             <h3 class="mt-3 text-xl font-bold">Find the right device</h3>
             <p class="mt-3 max-w-lg leading-7 text-muted">Browse the chip catalog by family or model, or auto-detect a connected target. Device ID and memory sizes stay visible in the workspace.</p>
           </article>
-          <article class="border-b border-line py-8 sm:py-10">
-            <p class="font-mono text-xs text-signal">FIRMWARE</p>
+          <article class="feature-item border-b border-line py-8 sm:py-10">
+            <p class="flex items-center gap-2 text-sm font-semibold text-signal"><i data-lucide="file-code-2" class="h-4 w-4" aria-hidden="true"></i>Firmware</p>
             <h3 class="mt-3 text-xl font-bold">Load HEX or BIN images</h3>
             <p class="mt-3 max-w-lg leading-7 text-muted">Open a firmware image, review its name, format, and size, then replace or clear it when the next build is ready.</p>
           </article>
-          <article class="border-b border-line py-8 sm:py-10">
-            <p class="font-mono text-xs text-hardware">OPERATIONS</p>
+          <article class="feature-item border-b border-line py-8 sm:py-10">
+            <p class="flex items-center gap-2 text-sm font-semibold text-hardware"><i data-lucide="circle-check" class="h-4 w-4" aria-hidden="true"></i>Programming</p>
             <h3 class="mt-3 text-xl font-bold">Program with progress and verify</h3>
             <p class="mt-3 max-w-lg leading-7 text-muted">Program the loaded image with progress reporting, or run verification independently. Read, erase, and blank-check are available as focused actions with confirmation for destructive operations.</p>
           </article>
-          <article class="border-b border-line py-8 sm:py-10">
-            <p class="font-mono text-xs text-hardware">CONFIGURATION</p>
+          <article class="feature-item border-b border-line py-8 sm:py-10">
+            <p class="flex items-center gap-2 text-sm font-semibold text-hardware"><i data-lucide="sliders-horizontal" class="h-4 w-4" aria-hidden="true"></i>Configuration</p>
             <h3 class="mt-3 text-xl font-bold">Edit configuration words carefully</h3>
             <p class="mt-3 max-w-lg leading-7 text-muted">Change editable bits or enter a hexadecimal word directly. Device masks keep reserved bits protected, and values stay synchronized while you edit.</p>
           </article>
-          <article class="border-b border-line py-8 sm:py-10">
-            <p class="font-mono text-xs text-signal">MEMORY</p>
+          <article class="feature-item border-b border-line py-8 sm:py-10">
+            <p class="flex items-center gap-2 text-sm font-semibold text-signal"><i data-lucide="database" class="h-4 w-4" aria-hidden="true"></i>Memory viewer</p>
             <h3 class="mt-3 text-xl font-bold">Inspect each memory region</h3>
-            <p class="mt-3 max-w-lg leading-7 text-muted">Switch between Program, EEPROM, and Config data. Compare the imported image with memory read from the target, then export read data as an Intel HEX file.</p>
+            <p class="mt-3 max-w-lg leading-7 text-muted">Switch between Program, EEPROM, and Config data, and between the imported image and memory read from the target. Export read data as an Intel HEX file.</p>
           </article>
-          <article class="border-b border-line py-8 sm:py-10">
-            <p class="font-mono text-xs text-signal">CONNECTION</p>
+          <article class="feature-item border-b border-line py-8 sm:py-10">
+            <p class="flex items-center gap-2 text-sm font-semibold text-signal"><i data-lucide="usb" class="h-4 w-4" aria-hidden="true"></i>Connection status</p>
             <h3 class="mt-3 text-xl font-bold">Know what the programmer is doing</h3>
             <p class="mt-3 max-w-lg leading-7 text-muted">Connection state, programmer model, serial number, firmware version, operation status, and write progress are surfaced in the desktop workspace.</p>
           </article>
         </div>
       </section>
 
-      <section id="screens" class="overflow-hidden border-y border-line bg-[#e9eef3]">
-        <div class="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 sm:py-24 lg:grid-cols-[0.72fr_1.28fr] lg:items-center lg:px-12">
-          <div class="max-w-lg">
-            <p class="font-mono text-xs text-hardware">A DESKTOP-FIRST WORKSPACE</p>
-            <h2 class="mt-4 text-3xl font-bold leading-tight sm:text-4xl">Compact when you need it. Clear when it matters.</h2>
-            <p class="mt-5 leading-7 text-muted">A centered workspace switcher keeps Programmer and HEX Viewer one click apart. The command bar, target details, firmware state, and connection status remain in view while you work.</p>
-            <div class="mt-8 border-l-2 border-signal pl-4">
-              <p class="font-semibold">Two themes, same workflow</p>
-              <p class="mt-1 text-sm leading-6 text-muted">Light and dark desktop screenshots show the same familiar controls in different working conditions.</p>
-            </div>
-          </div>
-          <div class="relative min-h-[280px] sm:min-h-[440px]">
-            <figure class="absolute left-0 top-5 w-[83%] overflow-hidden rounded-lg border border-white bg-white shadow-frame sm:top-0 sm:w-[78%]">
-              <img src="./images/mac-ui-light.png" alt="Light theme showing a connected PICkit 2, selected chip, firmware image, and status details" class="block h-auto w-full" loading="lazy" />
-            </figure>
-            <figure class="absolute bottom-0 right-0 w-[69%] overflow-hidden rounded-lg border border-white/20 bg-[#0b1726] shadow-frame sm:w-[66%]">
-              <img src="./images/mac-ui-dark.png" alt="Dark theme showing the PICKit2 programmer workspace before firmware is loaded" class="block h-auto w-full" loading="lazy" />
-            </figure>
-          </div>
-        </div>
-      </section>
-
       <section id="android" class="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28 lg:px-12">
         <div class="relative overflow-hidden rounded-xl bg-ink px-6 py-10 text-white sm:px-10 sm:py-14 lg:px-14">
-          <div class="relative z-10 grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div class="relative z-10 grid gap-8 lg:grid-cols-[1fr_auto_auto] lg:items-center">
             <div class="max-w-2xl">
-              <p class="font-mono text-xs text-[#9fc5ff]">IN DEVELOPMENT</p>
+              <p class="text-sm font-semibold text-[#9fc5ff]">In development</p>
               <h2 class="mt-4 text-3xl font-bold leading-tight sm:text-4xl">PICKit2 for Android is coming soon.</h2>
               <p class="mt-4 max-w-xl leading-7 text-slate-300">The Android app is being developed for USB-connected PICkit 2 hardware. This page will be updated when it is ready to download.</p>
+            </div>
+            <div class="chip-art mx-auto" aria-hidden="true">
+              <div class="chip-art-core">
+                <i data-lucide="cpu" class="h-9 w-9" stroke-width="1.5"></i>
+                <span>PIC</span>
+              </div>
             </div>
             <span class="inline-flex w-fit items-center gap-3 rounded-md border border-white/20 px-4 py-3 text-sm font-semibold text-white">
               <span class="h-2.5 w-2.5 rounded-full bg-brass"></span>
@@ -271,8 +338,30 @@
           PICKit2
         </a>
         <p>PIC programming for the bench, with the details in view.</p>
-        <a href="#top" class="font-semibold text-ink hover:text-signal focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-signal">Back to top</a>
+        <a href="https://github.com/An7orAhmed/pickit2-flutter/releases/download/V1.0.0/PICKit2-macOS-v1.0.0.dmg" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 font-semibold text-signal hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-signal"><i data-lucide="download" class="h-4 w-4" aria-hidden="true"></i>Download v1.0.0</a>
       </div>
     </footer>
+    <script src="https://unpkg.com/lucide@0.468.0"></script>
+    <script>
+      if (window.lucide) lucide.createIcons();
+
+      const featureItems = document.querySelectorAll(".feature-item");
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      if (reducedMotion || !("IntersectionObserver" in window)) {
+        featureItems.forEach((item) => item.classList.add("is-visible"));
+      } else {
+        const featureObserver = new IntersectionObserver((entries, observer) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.12 });
+
+        featureItems.forEach((item) => featureObserver.observe(item));
+      }
+    </script>
   </body>
 </html>
