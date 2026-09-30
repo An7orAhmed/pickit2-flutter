@@ -6,6 +6,7 @@ class DesktopHomeView extends StatelessWidget {
   final HomeController controller;
   final int selectedPage;
   final bool darkMode;
+  final VoidCallback onShowAppInfo;
   final VoidCallback onToggleTheme;
   final ValueChanged<int> onSelectPage;
   final VoidCallback onConnect;
@@ -26,6 +27,7 @@ class DesktopHomeView extends StatelessWidget {
     required this.controller,
     required this.selectedPage,
     required this.darkMode,
+    required this.onShowAppInfo,
     required this.onToggleTheme,
     required this.onSelectPage,
     required this.onConnect,
@@ -44,46 +46,47 @@ class DesktopHomeView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final palette = _DesktopPalette.of(context);
     return Scaffold(
-      backgroundColor: colors.surface,
-      body: Column(
-        children: [
-          _DesktopHeader(
-            controller: controller,
-            selectedPage: selectedPage,
-            darkMode: darkMode,
-            onToggleTheme: onToggleTheme,
-            onSelectPage: onSelectPage,
-            onConnect: onConnect,
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: IndexedStack(
-              index: selectedPage,
-              children: [
-                _ProgrammerWorkspace(
-                  controller: controller,
-                  onLoadFirmware: onLoadFirmware,
-                  onClearFirmware: onClearFirmware,
-                  onChooseTarget: onChooseTarget,
-                  onAutoDetect: onAutoDetect,
-                  onProgram: onProgram,
-                  onVerify: onVerify,
-                  onErase: onErase,
-                  onRead: onRead,
-                  onBlankCheck: onBlankCheck,
-                  onFuseConfig: onFuseConfig,
-                ),
-                ColoredBox(
-                  color: colors.surfaceContainerLowest,
-                  child: memoryView,
-                ),
-              ],
+      backgroundColor: palette.background,
+      body: DecoratedBox(
+        decoration: BoxDecoration(gradient: palette.backgroundGradient),
+        child: Column(
+          children: [
+            _DesktopHeader(
+              controller: controller,
+              selectedPage: selectedPage,
+              darkMode: darkMode,
+              onShowAppInfo: onShowAppInfo,
+              onToggleTheme: onToggleTheme,
+              onSelectPage: onSelectPage,
+              onConnect: onConnect,
             ),
-          ),
-          _DesktopStatusBar(controller: controller),
-        ],
+            Expanded(
+              child: IndexedStack(
+                index: selectedPage,
+                children: [
+                  _ProgrammerWorkspace(
+                    controller: controller,
+                    onLoadFirmware: onLoadFirmware,
+                    onClearFirmware: onClearFirmware,
+                    onChooseTarget: onChooseTarget,
+                    onAutoDetect: onAutoDetect,
+                    onProgram: onProgram,
+                    onVerify: onVerify,
+                    onErase: onErase,
+                    onRead: onRead,
+                    onBlankCheck: onBlankCheck,
+                    onFuseConfig: onFuseConfig,
+                    onViewFirmware: () => onSelectPage(1),
+                  ),
+                  ColoredBox(color: palette.editorBackground, child: memoryView),
+                ],
+              ),
+            ),
+            _DesktopStatusBar(controller: controller),
+          ],
+        ),
       ),
     );
   }
@@ -93,6 +96,7 @@ class _DesktopHeader extends StatelessWidget {
   final HomeController controller;
   final int selectedPage;
   final bool darkMode;
+  final VoidCallback onShowAppInfo;
   final VoidCallback onToggleTheme;
   final ValueChanged<int> onSelectPage;
   final VoidCallback onConnect;
@@ -101,6 +105,7 @@ class _DesktopHeader extends StatelessWidget {
     required this.controller,
     required this.selectedPage,
     required this.darkMode,
+    required this.onShowAppInfo,
     required this.onToggleTheme,
     required this.onSelectPage,
     required this.onConnect,
@@ -108,97 +113,217 @@ class _DesktopHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final palette = _DesktopPalette.of(context);
     return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      color: colors.surfaceContainer,
-      child: Row(
+      height: 82,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        gradient: palette.headerGradient,
+        border: Border(bottom: BorderSide(color: palette.border)),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(7),
-            child: Image.asset(
-              'assets/pickit2_logo.png',
-              width: 32,
-              height: 32,
-              fit: BoxFit.cover,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset('assets/pickit2_logo.png', width: 52, height: 52, fit: BoxFit.contain),
+                const SizedBox(width: 14),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'PICKit2',
+                      style: TextStyle(color: palette.text, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.3),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      'Microchip PIC Programmer',
+                      style: TextStyle(color: palette.mutedText, fontSize: 11.5, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 10),
-          const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'PICKit2',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-              ),
-              Text(
-                'Kitsware · Antor Ahmed',
-                style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          const SizedBox(width: 24),
-          SegmentedButton<int>(
-            showSelectedIcon: false,
-            selected: {selectedPage},
-            onSelectionChanged: (selection) => onSelectPage(selection.first),
-            style: ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              padding: const WidgetStatePropertyAll(
-                EdgeInsets.symmetric(horizontal: 13),
-              ),
-              textStyle: const WidgetStatePropertyAll(
-                TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
-              ),
+          _WorkspaceSwitcher(selectedPage: selectedPage, onSelectPage: onSelectPage),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _HeaderIconButton(icon: Icons.info_outline_rounded, tooltip: 'About PICKit2', onPressed: onShowAppInfo),
+                const SizedBox(width: 4),
+                _HeaderIconButton(
+                  icon: darkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                  tooltip: darkMode ? 'Use light theme' : 'Use dark theme',
+                  onPressed: onToggleTheme,
+                ),
+                Container(width: 1, height: 32, margin: const EdgeInsets.symmetric(horizontal: 14), color: palette.border),
+                _ConnectButton(connected: controller.connected, enabled: !controller.busy, onPressed: onConnect),
+              ],
             ),
-            segments: const [
-              ButtonSegment(
-                value: 0,
-                icon: Icon(Icons.developer_board_rounded, size: 15),
-                label: Text('Programmer'),
-              ),
-              ButtonSegment(
-                value: 1,
-                icon: Icon(Icons.grid_on_rounded, size: 15),
-                label: Text('HEX Editor'),
-              ),
-            ],
-          ),
-          const Spacer(),
-          IconButton(
-            onPressed: onToggleTheme,
-            tooltip: darkMode ? 'Use light theme' : 'Use dark theme',
-            icon: Icon(
-              darkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 6),
-          _ConnectionIndicator(connected: controller.connected),
-          const SizedBox(width: 12),
-          FilledButton.icon(
-            onPressed: controller.busy ? null : onConnect,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(126, 34),
-              backgroundColor: controller.connected
-                  ? colors.errorContainer
-                  : colors.primary,
-              foregroundColor: controller.connected
-                  ? colors.onErrorContainer
-                  : colors.onPrimary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            icon: Icon(
-              controller.connected ? Icons.usb_off_rounded : Icons.usb_rounded,
-              size: 16,
-            ),
-            label: Text(controller.connected ? 'Disconnect' : 'Connect'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WorkspaceSwitcher extends StatelessWidget {
+  final int selectedPage;
+  final ValueChanged<int> onSelectPage;
+
+  const _WorkspaceSwitcher({required this.selectedPage, required this.onSelectPage});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    return Container(
+      width: 354,
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(
+        color: palette.controlBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.borderStrong),
+        boxShadow: palette.controlShadow,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _WorkspaceTab(
+              label: 'Programmer',
+              icon: Icons.developer_board_rounded,
+              selected: selectedPage == 0,
+              onPressed: () => onSelectPage(0),
+            ),
+          ),
+          Expanded(
+            child: _WorkspaceTab(
+              label: 'HEX Viewer',
+              icon: Icons.grid_on_rounded,
+              selected: selectedPage == 1,
+              onPressed: () => onSelectPage(1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkspaceTab extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  const _WorkspaceTab({required this.label, required this.icon, required this.selected, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(9),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            gradient: selected ? palette.primaryGradient : null,
+            borderRadius: BorderRadius.circular(9),
+            border: selected ? Border.all(color: palette.primaryBorder) : null,
+            boxShadow: selected ? palette.primaryShadow : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 20, color: selected ? Colors.white : palette.mutedText),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: TextStyle(color: selected ? Colors.white : palette.mutedText, fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _HeaderIconButton({required this.icon, required this.tooltip, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: tooltip,
+      icon: Icon(icon, size: 22),
+      color: palette.text,
+      hoverColor: palette.hover,
+      style: IconButton.styleFrom(
+        minimumSize: const Size(40, 40),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+      ),
+    );
+  }
+}
+
+class _ConnectButton extends StatelessWidget {
+  final bool connected;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  const _ConnectButton({required this.connected, required this.enabled, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    return Opacity(
+      opacity: enabled ? 1 : 0.58,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onPressed : null,
+          borderRadius: BorderRadius.circular(10),
+          child: Ink(
+            width: 132,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: connected ? palette.disconnectGradient : palette.primaryGradient,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: connected ? palette.disconnectBorder : palette.primaryBorder),
+              boxShadow: connected ? null : palette.primaryShadow,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  connected ? Icons.usb_off_rounded : Icons.usb_rounded,
+                  size: 20,
+                  color: connected ? palette.disconnectText : Colors.white,
+                ),
+                const SizedBox(width: 9),
+                Text(
+                  connected ? 'Disconnect' : 'Connect',
+                  style: TextStyle(color: connected ? palette.disconnectText : Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -216,6 +341,7 @@ class _ProgrammerWorkspace extends StatelessWidget {
   final VoidCallback onRead;
   final VoidCallback onBlankCheck;
   final VoidCallback onFuseConfig;
+  final VoidCallback onViewFirmware;
 
   const _ProgrammerWorkspace({
     required this.controller,
@@ -229,12 +355,12 @@ class _ProgrammerWorkspace extends StatelessWidget {
     required this.onRead,
     required this.onBlankCheck,
     required this.onFuseConfig,
+    required this.onViewFirmware,
   });
 
   @override
   Widget build(BuildContext context) {
-    final targetReady =
-        controller.connected && controller.chipSelected && !controller.busy;
+    final targetReady = controller.connected && controller.chipSelected && !controller.busy;
     final imageReady = targetReady && controller.hasImportedData;
 
     return Column(
@@ -250,28 +376,20 @@ class _ProgrammerWorkspace extends StatelessWidget {
           onBlankCheck: onBlankCheck,
           onFuseConfig: onFuseConfig,
         ),
-        const Divider(height: 1),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _TargetPanel(controller: controller, onChooseTarget: onChooseTarget, onAutoDetect: onAutoDetect),
+                const SizedBox(height: 14),
                 Expanded(
-                  flex: 6,
-                  child: _TargetPanel(
-                    controller: controller,
-                    onChooseTarget: onChooseTarget,
-                    onAutoDetect: onAutoDetect,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 5,
                   child: _FirmwarePanel(
                     controller: controller,
                     onLoadFirmware: onLoadFirmware,
                     onClearFirmware: onClearFirmware,
+                    onViewFirmware: onViewFirmware,
                   ),
                 ),
               ],
@@ -308,54 +426,37 @@ class _CommandBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final palette = _DesktopPalette.of(context);
     return Container(
-      height: 52,
-      color: colors.surfaceContainerLow,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      height: 76,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
+      decoration: BoxDecoration(
+        color: palette.toolbarBackground,
+        border: Border(bottom: BorderSide(color: palette.border)),
+      ),
       child: Row(
         children: [
-          _CommandButton(
-            label: 'Program',
-            icon: Icons.download_rounded,
-            primary: true,
-            enabled: imageReady,
-            onPressed: onProgram,
-          ),
-          _CommandButton(
-            label: 'Verify',
-            icon: Icons.verified_outlined,
-            enabled: imageReady,
-            onPressed: onVerify,
-          ),
-          const _CommandSeparator(),
-          _CommandButton(
-            label: 'Read',
-            icon: Icons.upload_file_outlined,
-            enabled: targetReady,
-            onPressed: onRead,
-          ),
+          _CommandButton(label: 'Program', icon: Icons.download_rounded, primary: true, enabled: imageReady, onPressed: onProgram),
+          const SizedBox(width: 10),
+          _CommandButton(label: 'Verify', icon: Icons.verified_outlined, enabled: imageReady, onPressed: onVerify),
+          const SizedBox(width: 10),
+          _CommandButton(label: 'Read', icon: Icons.description_outlined, enabled: targetReady, onPressed: onRead),
+          const SizedBox(width: 10),
           _CommandButton(
             label: 'Blank Check',
             icon: Icons.check_box_outline_blank_rounded,
             enabled: targetReady,
+            flex: 12,
             onPressed: onBlankCheck,
           ),
-          _CommandButton(
-            label: 'Erase',
-            icon: Icons.delete_outline_rounded,
-            destructive: true,
-            enabled: targetReady,
-            onPressed: onErase,
-          ),
-          const _CommandSeparator(),
+          const SizedBox(width: 10),
+          _CommandButton(label: 'Erase', icon: Icons.delete_outline_rounded, destructive: true, enabled: targetReady, onPressed: onErase),
+          const SizedBox(width: 10),
           _CommandButton(
             label: 'Configuration',
             icon: Icons.tune_rounded,
-            enabled:
-                !controller.busy &&
-                controller.chipSelected &&
-                controller.hasImportedData,
+            enabled: !controller.busy && controller.chipSelected && controller.hasImportedData,
+            flex: 14,
             onPressed: onFuseConfig,
           ),
         ],
@@ -364,49 +465,76 @@ class _CommandBar extends StatelessWidget {
   }
 }
 
-class _FirmwarePanel extends StatelessWidget {
-  final HomeController controller;
-  final VoidCallback onLoadFirmware;
-  final VoidCallback onClearFirmware;
+class _CommandButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool enabled;
+  final bool primary;
+  final bool destructive;
+  final int flex;
+  final VoidCallback onPressed;
 
-  const _FirmwarePanel({
-    required this.controller,
-    required this.onLoadFirmware,
-    required this.onClearFirmware,
+  const _CommandButton({
+    required this.label,
+    required this.icon,
+    required this.enabled,
+    required this.onPressed,
+    this.primary = false,
+    this.destructive = false,
+    this.flex = 10,
   });
 
   @override
   Widget build(BuildContext context) {
-    final loaded = controller.hasImportedData;
-    return _DesktopPanel(
-      title: 'Firmware image',
-      icon: Icons.insert_drive_file_outlined,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          OutlinedButton.icon(
-            onPressed: controller.busy ? null : onLoadFirmware,
-            icon: const Icon(Icons.folder_open_rounded, size: 15),
-            label: Text(loaded ? 'Replace…' : 'Open…'),
+    final palette = _DesktopPalette.of(context);
+    final textColor = enabled
+        ? destructive
+              ? palette.danger
+              : primary
+              ? Colors.white
+              : palette.text
+        : palette.disabledText;
+    return Expanded(
+      flex: flex,
+      child: Opacity(
+        opacity: enabled ? 1 : 0.72,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: enabled ? onPressed : null,
+            borderRadius: BorderRadius.circular(10),
+            child: Ink(
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: primary && enabled ? palette.primaryGradient : palette.controlGradient,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: primary && enabled
+                      ? palette.primaryBorder
+                      : destructive && enabled
+                      ? palette.danger.withValues(alpha: 0.55)
+                      : palette.borderStrong,
+                ),
+                boxShadow: primary && enabled ? palette.primaryShadow : palette.controlShadow,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 21, color: textColor),
+                  const SizedBox(width: 9),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: textColor, fontSize: 13.5, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: loaded && !controller.busy ? onClearFirmware : null,
-            tooltip: 'Clear firmware image',
-            icon: const Icon(Icons.close_rounded, size: 17),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _PropertyRow(label: 'File', value: controller.firmwareName),
-          _PropertyRow(label: 'Format', value: controller.firmwareType),
-          _PropertyRow(
-            label: 'Loaded size',
-            value: controller.firmwareSize,
-            showDivider: false,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -417,116 +545,484 @@ class _TargetPanel extends StatelessWidget {
   final VoidCallback onChooseTarget;
   final VoidCallback onAutoDetect;
 
-  const _TargetPanel({
-    required this.controller,
-    required this.onChooseTarget,
-    required this.onAutoDetect,
-  });
+  const _TargetPanel({required this.controller, required this.onChooseTarget, required this.onAutoDetect});
 
   @override
   Widget build(BuildContext context) {
     return _DesktopPanel(
       title: 'Target device',
+      subtitle: 'Select a target device or auto-detect from the connected PICKit2.',
       icon: Icons.memory_rounded,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            onPressed: controller.connected && !controller.busy
-                ? onAutoDetect
-                : null,
-            tooltip: 'Auto detect target',
-            icon: const Icon(Icons.radar_rounded, size: 17),
+          _PanelActionButton(
+            label: 'Auto Detect',
+            icon: Icons.radar_rounded,
+            enabled: controller.connected && !controller.busy,
+            onPressed: onAutoDetect,
           ),
-          IconButton.filledTonal(
-            onPressed: controller.busy ? null : onChooseTarget,
-            tooltip: 'Choose target',
-            icon: const Icon(Icons.list_alt_rounded, size: 17),
+          const SizedBox(width: 10),
+          _PanelActionButton(
+            label: 'Select Chip',
+            icon: Icons.list_alt_rounded,
+            primary: true,
+            enabled: !controller.busy,
+            onPressed: onChooseTarget,
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _TargetHeading(
-                  name: controller.targetDevice,
-                  family: controller.deviceFamily,
-                  selected: controller.chipSelected,
-                ),
+      child: SizedBox(
+        height: 76,
+        child: Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: _TargetHeading(name: controller.targetDevice, family: controller.deviceFamily, selected: controller.chipSelected),
+            ),
+            const _PanelDivider(),
+            Expanded(
+              flex: 8,
+              child: Row(
+                children: [
+                  _TargetMetric(icon: Icons.memory_rounded, label: 'ID', value: controller.deviceId),
+                  const SizedBox(width: 10),
+                  _TargetMetric(icon: Icons.storage_rounded, label: 'Flash', value: controller.flashSize),
+                  const SizedBox(width: 10),
+                  _TargetMetric(icon: Icons.developer_board_outlined, label: 'RAM', value: controller.ramSize),
+                  const SizedBox(width: 10),
+                  _TargetMetric(icon: Icons.dns_outlined, label: 'EEPROM', value: controller.eepromSize),
+                ],
               ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FirmwarePanel extends StatelessWidget {
+  final HomeController controller;
+  final VoidCallback onLoadFirmware;
+  final VoidCallback onClearFirmware;
+  final VoidCallback onViewFirmware;
+
+  const _FirmwarePanel({
+    required this.controller,
+    required this.onLoadFirmware,
+    required this.onClearFirmware,
+    required this.onViewFirmware,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final loaded = controller.hasImportedData;
+    return _DesktopPanel(
+      title: 'Firmware image',
+      subtitle: 'Load a HEX or BIN firmware file to program into the device.',
+      icon: Icons.description_outlined,
+      expandChild: true,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _PanelActionButton(
+            label: loaded ? 'Replace…' : 'Open…',
+            icon: Icons.folder_open_rounded,
+            primary: true,
+            enabled: !controller.busy,
+            onPressed: onLoadFirmware,
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _TargetMetric(label: 'Device ID', value: controller.deviceId),
-              _TargetMetric(label: 'Flash', value: controller.flashSize),
-              _TargetMetric(label: 'RAM', value: controller.ramSize),
-              _TargetMetric(label: 'EEPROM', value: controller.eepromSize),
-            ],
-          ),
+          if (loaded) ...[
+            const SizedBox(width: 8),
+            _PanelIconButton(
+              tooltip: 'Clear firmware image',
+              icon: Icons.close_rounded,
+              enabled: !controller.busy,
+              onPressed: onClearFirmware,
+            ),
+          ],
         ],
       ),
+      child: loaded
+          ? _LoadedFirmware(
+              name: controller.firmwareName,
+              type: controller.firmwareType,
+              size: controller.firmwareSize,
+              enabled: !controller.busy,
+              onView: onViewFirmware,
+            )
+          : _EmptyFirmware(enabled: !controller.busy, onOpen: onLoadFirmware),
     );
   }
 }
 
 class _DesktopPanel extends StatelessWidget {
   final String title;
+  final String subtitle;
   final IconData icon;
   final Widget child;
   final Widget? trailing;
+  final bool expandChild;
 
   const _DesktopPanel({
     required this.title,
+    required this.subtitle,
     required this.icon,
     required this.child,
     this.trailing,
+    this.expandChild = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final palette = _DesktopPalette.of(context);
+    final body = Padding(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: palette.panelBodyGradient,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: palette.border),
+        ),
+        child: Padding(padding: const EdgeInsets.all(12), child: child),
+      ),
+    );
     return Container(
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.outlineVariant),
+        gradient: palette.panelGradient,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.borderStrong),
+        boxShadow: palette.panelShadow,
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            height: 45,
-            padding: const EdgeInsets.symmetric(horizontal: 13),
-            decoration: BoxDecoration(
-              color: colors.surfaceContainerHigh,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(7),
+          SizedBox(
+            height: 64,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Row(
+                children: [
+                  Icon(icon, size: 27, color: palette.primary),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(color: palette.text, fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: palette.mutedText, fontSize: 11.5, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (trailing != null) ...[const SizedBox(width: 14), trailing!],
+                ],
               ),
             ),
+          ),
+          if (expandChild) Expanded(child: body) else body,
+        ],
+      ),
+    );
+  }
+}
+
+class _PanelActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool enabled;
+  final bool primary;
+  final VoidCallback onPressed;
+
+  const _PanelActionButton({required this.label, required this.icon, required this.enabled, required this.onPressed, this.primary = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    final foreground = enabled
+        ? primary
+              ? palette.primaryActionText
+              : palette.text
+        : palette.disabledText;
+    return Opacity(
+      opacity: enabled ? 1 : 0.68,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onPressed : null,
+          borderRadius: BorderRadius.circular(9),
+          child: Ink(
+            height: 38,
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            decoration: BoxDecoration(
+              color: primary ? palette.primaryActionBackground : palette.hover,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(color: primary ? palette.primary : palette.borderStrong),
+            ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 16, color: colors.primary),
+                Icon(icon, size: 18, color: foreground),
                 const SizedBox(width: 8),
                 Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  label,
+                  style: TextStyle(color: foreground, fontSize: 12.5, fontWeight: FontWeight.w700),
                 ),
-                const Spacer(),
-                trailing ?? const SizedBox.shrink(),
               ],
             ),
           ),
-          Padding(padding: const EdgeInsets.all(14), child: child),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _PanelIconButton extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  const _PanelIconButton({required this.tooltip, required this.icon, required this.enabled, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    return IconButton(
+      onPressed: enabled ? onPressed : null,
+      tooltip: tooltip,
+      icon: Icon(icon, size: 18),
+      color: palette.text,
+      style: IconButton.styleFrom(
+        minimumSize: const Size(38, 38),
+        side: BorderSide(color: palette.borderStrong),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+      ),
+    );
+  }
+}
+
+class _PanelDivider extends StatelessWidget {
+  const _PanelDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    return Container(width: 1, height: 56, margin: const EdgeInsets.symmetric(horizontal: 16), color: palette.borderStrong);
+  }
+}
+
+class _TargetHeading extends StatelessWidget {
+  final String name;
+  final String family;
+  final bool selected;
+
+  const _TargetHeading({required this.name, required this.family, required this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    return Row(
+      children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            gradient: palette.controlGradient,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: palette.borderStrong),
+          ),
+          child: Icon(Icons.memory_rounded, size: 30, color: selected ? palette.primary : palette.disabledText),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: selected ? palette.text : palette.disabledText, fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                family,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: palette.mutedText, fontSize: 12, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TargetMetric extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _TargetMetric({required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    return Expanded(
+      child: Container(
+        height: 60,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: palette.metricBackground,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: palette.borderStrong),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 19, color: palette.mutedText),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(color: palette.mutedText, fontSize: 10.5, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: palette.text, fontSize: 13.5, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyFirmware extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onOpen;
+
+  const _EmptyFirmware({required this.enabled, required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    final title = Text(
+      'No image loaded',
+      style: TextStyle(color: palette.text, fontSize: 14.5, fontWeight: FontWeight.w700),
+    );
+    final description = Text(
+      'Open a HEX or BIN firmware file to get started.',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: palette.mutedText, fontSize: 11),
+    );
+    final action = _PanelActionButton(label: 'Open…', icon: Icons.folder_open_rounded, primary: true, enabled: enabled, onPressed: onOpen);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxHeight < 145) {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.file_present_outlined, size: 38, color: palette.primary),
+              const SizedBox(width: 14),
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [title, const SizedBox(height: 2), description],
+                ),
+              ),
+              const SizedBox(width: 20),
+              action,
+            ],
+          );
+        }
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.file_present_outlined, size: 44, color: palette.primary),
+              const SizedBox(height: 5),
+              title,
+              const SizedBox(height: 2),
+              description,
+              const SizedBox(height: 9),
+              action,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _LoadedFirmware extends StatelessWidget {
+  final String name;
+  final String type;
+  final String size;
+  final bool enabled;
+  final VoidCallback onView;
+
+  const _LoadedFirmware({required this.name, required this.type, required this.size, required this.enabled, required this.onView});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = _DesktopPalette.of(context);
+    return Row(
+      children: [
+        Container(
+          width: 68,
+          height: 68,
+          decoration: BoxDecoration(
+            color: palette.primaryActionBackground,
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(color: palette.primary.withValues(alpha: 0.55)),
+          ),
+          child: Icon(Icons.description_rounded, size: 34, color: palette.primary),
+        ),
+        const SizedBox(width: 18),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: palette.text, fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 5),
+              Text('$type  ·  $size', style: TextStyle(color: palette.mutedText, fontSize: 12)),
+            ],
+          ),
+        ),
+        _PanelActionButton(label: 'View', icon: Icons.grid_on_rounded, enabled: enabled, onPressed: onView),
+      ],
     );
   }
 }
@@ -538,67 +1034,64 @@ class _DesktopStatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final palette = _DesktopPalette.of(context);
     final active = controller.busy || controller.programming;
-    final operationText = active && controller.writeMessage.isNotEmpty
-        ? controller.writeMessage
-        : controller.connectionStatus;
-    final connectedColor = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF67D391)
-        : const Color(0xFF197A43);
+    final operationText = active && controller.writeMessage.isNotEmpty ? controller.writeMessage : controller.connectionStatus;
     return Container(
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
-        color: colors.surfaceContainer,
-        border: Border(top: BorderSide(color: colors.outlineVariant)),
+        gradient: palette.statusGradient,
+        border: Border(top: BorderSide(color: palette.borderStrong)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 1080;
           return Row(
             children: [
-              Icon(
-                active ? Icons.sync_rounded : Icons.info_outline_rounded,
-                size: 12,
-                color: active ? colors.primary : colors.onSurfaceVariant,
+              Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: controller.connected ? palette.success.withValues(alpha: 0.18) : Colors.transparent,
+                  border: Border.all(color: controller.connected ? palette.success : palette.mutedText, width: 1.5),
+                ),
+                child: active
+                    ? Padding(
+                        padding: const EdgeInsets.all(2.5),
+                        child: CircularProgressIndicator(strokeWidth: 1.5, color: palette.primary),
+                      )
+                    : null,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   operationText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    color: colors.onSurfaceVariant,
-                  ),
+                  style: TextStyle(color: palette.mutedText, fontSize: 11.5, fontWeight: FontWeight.w500),
                 ),
               ),
               if (active) ...[
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 SizedBox(
-                  width: compact ? 105 : 150,
+                  width: compact ? 110 : 160,
                   child: LinearProgressIndicator(
-                    value: controller.programming
-                        ? (controller.progress / 100).clamp(0.0, 1.0)
-                        : null,
+                    value: controller.programming ? (controller.progress / 100).clamp(0.0, 1.0) : null,
                     minHeight: 4,
                     borderRadius: BorderRadius.circular(2),
-                    backgroundColor: colors.surfaceContainerHighest,
+                    backgroundColor: palette.metricBackground,
+                    color: palette.primary,
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 7),
                 SizedBox(
-                  width: 30,
+                  width: 32,
                   child: Text(
                     controller.programming ? '${controller.progress}%' : '',
                     textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      color: colors.primary,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+                    style: TextStyle(color: palette.primary, fontSize: 10.5, fontFeatures: const [FontFeature.tabularFigures()]),
                   ),
                 ),
               ],
@@ -606,46 +1099,20 @@ class _DesktopStatusBar extends StatelessWidget {
               _StatusValue(
                 label: 'USB',
                 value: controller.connected ? 'Connected' : 'Offline',
-                valueColor: controller.connected
-                    ? connectedColor
-                    : colors.onSurfaceVariant,
-                maxWidth: 94,
+                valueColor: controller.connected ? palette.success : null,
+                maxWidth: 100,
               ),
               const _StatusDivider(),
-              _StatusValue(
-                label: 'Model',
-                value: controller.deviceName,
-                maxWidth: 104,
-              ),
+              _StatusValue(label: 'Model', value: controller.deviceName, maxWidth: 110),
               const _StatusDivider(),
-              _StatusValue(
-                label: 'S/N',
-                value: controller.serialNumber,
-                maxWidth: 118,
-              ),
+              _StatusValue(label: 'S/N', value: controller.serialNumber, maxWidth: 120),
               const _StatusDivider(),
-              _StatusValue(
-                label: 'FW',
-                value: controller.programmerFirmware,
-                maxWidth: 78,
-              ),
+              _StatusValue(label: 'FW', value: controller.programmerFirmware, maxWidth: 78),
               if (!active && !compact) ...[
                 const _StatusDivider(),
-                _StatusValue(
-                  label: 'Target',
-                  value: controller.chipSelected
-                      ? controller.targetDevice
-                      : 'None',
-                  maxWidth: 128,
-                ),
+                _StatusValue(label: 'Target', value: controller.chipSelected ? controller.targetDevice : 'None', maxWidth: 132),
                 const _StatusDivider(),
-                _StatusValue(
-                  label: 'Image',
-                  value: controller.hasImportedData
-                      ? controller.firmwareName
-                      : 'None',
-                  maxWidth: 160,
-                ),
+                _StatusValue(label: 'Image', value: controller.hasImportedData ? controller.firmwareName : 'None', maxWidth: 165),
               ],
             ],
           );
@@ -660,12 +1127,8 @@ class _StatusDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 14,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      color: Theme.of(context).colorScheme.outlineVariant,
-    );
+    final palette = _DesktopPalette.of(context);
+    return Container(width: 1, height: 17, margin: const EdgeInsets.symmetric(horizontal: 10), color: palette.borderStrong);
   }
 }
 
@@ -675,16 +1138,11 @@ class _StatusValue extends StatelessWidget {
   final double maxWidth;
   final Color? valueColor;
 
-  const _StatusValue({
-    required this.label,
-    required this.value,
-    required this.maxWidth,
-    this.valueColor,
-  });
+  const _StatusValue({required this.label, required this.value, required this.maxWidth, this.valueColor});
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final palette = _DesktopPalette.of(context);
     return Tooltip(
       message: '$label: $value',
       child: ConstrainedBox(
@@ -694,273 +1152,170 @@ class _StatusValue extends StatelessWidget {
             children: [
               TextSpan(
                 text: '$label  ',
-                style: TextStyle(color: colors.onSurfaceVariant),
+                style: TextStyle(color: palette.mutedText),
               ),
               TextSpan(
                 text: value,
-                style: TextStyle(
-                  color: valueColor ?? colors.onSurface,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(color: valueColor ?? palette.text, fontWeight: FontWeight.w700),
               ),
             ],
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 10.5),
+          style: const TextStyle(fontSize: 11),
         ),
       ),
     );
   }
 }
 
-class _CommandButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool enabled;
-  final bool primary;
-  final bool destructive;
-  final VoidCallback onPressed;
+class _DesktopPalette {
+  final bool dark;
+  final Color background;
+  final Color editorBackground;
+  final Color toolbarBackground;
+  final Color controlBackground;
+  final Color metricBackground;
+  final Color primary;
+  final Color primaryBorder;
+  final Color primaryActionBackground;
+  final Color primaryActionText;
+  final Color border;
+  final Color borderStrong;
+  final Color text;
+  final Color mutedText;
+  final Color disabledText;
+  final Color hover;
+  final Color danger;
+  final Color success;
+  final Color disconnectText;
+  final Color disconnectBorder;
 
-  const _CommandButton({
-    required this.label,
-    required this.icon,
-    required this.enabled,
-    required this.onPressed,
-    this.primary = false,
-    this.destructive = false,
+  const _DesktopPalette({
+    required this.dark,
+    required this.background,
+    required this.editorBackground,
+    required this.toolbarBackground,
+    required this.controlBackground,
+    required this.metricBackground,
+    required this.primary,
+    required this.primaryBorder,
+    required this.primaryActionBackground,
+    required this.primaryActionText,
+    required this.border,
+    required this.borderStrong,
+    required this.text,
+    required this.mutedText,
+    required this.disabledText,
+    required this.hover,
+    required this.danger,
+    required this.success,
+    required this.disconnectText,
+    required this.disconnectBorder,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final foreground = destructive
-        ? colors.error
-        : primary
-        ? colors.onPrimary
-        : colors.onSurfaceVariant;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: TextButton.icon(
-        onPressed: enabled ? onPressed : null,
-        style: TextButton.styleFrom(
-          foregroundColor: foreground,
-          backgroundColor: primary && enabled
-              ? colors.primary
-              : colors.surfaceContainerLow,
-          disabledForegroundColor: colors.onSurface.withValues(alpha: 0.60),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
-            side: BorderSide(
-              color: primary && enabled
-                  ? colors.primary
-                  : destructive
-                  ? colors.error.withValues(alpha: enabled ? 0.55 : 0.28)
-                  : colors.outlineVariant,
-            ),
-          ),
-        ),
-        icon: Icon(icon, size: 16),
-        label: Text(label),
-      ),
+  factory _DesktopPalette.of(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    if (dark) {
+      return const _DesktopPalette(
+        dark: true,
+        background: Color(0xFF071220),
+        editorBackground: Color(0xFF081423),
+        toolbarBackground: Color(0xD90A1524),
+        controlBackground: Color(0xFF111D2E),
+        metricBackground: Color(0xB3071424),
+        primary: Color(0xFF3A91FF),
+        primaryBorder: Color(0xFF53B1FF),
+        primaryActionBackground: Color(0x332C8DFF),
+        primaryActionText: Color(0xFFE8F3FF),
+        border: Color(0xFF26384E),
+        borderStrong: Color(0xFF3B4D65),
+        text: Color(0xFFF1F5FF),
+        mutedText: Color(0xFFB6C3DD),
+        disabledText: Color(0xFF718099),
+        hover: Color(0xFF19263A),
+        danger: Color(0xFFFF8B93),
+        success: Color(0xFF69D49A),
+        disconnectText: Color(0xFFFFC1C5),
+        disconnectBorder: Color(0xFF7D4149),
+      );
+    }
+    return const _DesktopPalette(
+      dark: false,
+      background: Color(0xFFF3F7FC),
+      editorBackground: Color(0xFFF8FAFD),
+      toolbarBackground: Color(0xF7EDF3FA),
+      controlBackground: Color(0xFFFFFFFF),
+      metricBackground: Color(0xFFF8FAFD),
+      primary: Color(0xFF126FE5),
+      primaryBorder: Color(0xFF3187EF),
+      primaryActionBackground: Color(0xFFEAF3FF),
+      primaryActionText: Color(0xFF0756B8),
+      border: Color(0xFFD8E1ED),
+      borderStrong: Color(0xFFBFCBDC),
+      text: Color(0xFF142033),
+      mutedText: Color(0xFF607089),
+      disabledText: Color(0xFF8B98AA),
+      hover: Color(0xFFF2F6FB),
+      danger: Color(0xFFB32631),
+      success: Color(0xFF197A43),
+      disconnectText: Color(0xFF9D2531),
+      disconnectBorder: Color(0xFFE6A7AD),
     );
   }
-}
 
-class _CommandSeparator extends StatelessWidget {
-  const _CommandSeparator();
+  LinearGradient get backgroundGradient => dark
+      ? const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF07111F), Color(0xFF0A182A)])
+      : const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFFF8FAFD), Color(0xFFEEF4FA)]);
 
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 5),
-      child: SizedBox(height: 24, child: VerticalDivider(width: 1)),
-    );
-  }
-}
+  LinearGradient get headerGradient => dark
+      ? const LinearGradient(colors: [Color(0xF2111F31), Color(0xF20A1728)])
+      : const LinearGradient(colors: [Color(0xFFFFFFFF), Color(0xFFF2F6FB)]);
 
-class _ConnectionIndicator extends StatelessWidget {
-  final bool connected;
+  LinearGradient get panelGradient => dark
+      ? const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF17263A), Color(0xFF101D2D)])
+      : const LinearGradient(colors: [Color(0xFFFFFFFF), Color(0xFFF7FAFD)]);
 
-  const _ConnectionIndicator({required this.connected});
+  LinearGradient get panelBodyGradient => dark
+      ? const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xE60B1828), Color(0xF20A1625)])
+      : const LinearGradient(colors: [Color(0xFFF9FBFE), Color(0xFFF3F7FB)]);
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final connectedColor = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF67D391)
-        : const Color(0xFF197A43);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: connected
-            ? connectedColor.withValues(alpha: 0.14)
-            : colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(
-          color: connected
-              ? connectedColor.withValues(alpha: 0.45)
-              : colors.outlineVariant,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.circle,
-            size: 8,
-            color: connected ? connectedColor : colors.onSurfaceVariant,
-          ),
-          const SizedBox(width: 7),
-          Text(
-            connected ? 'PICkit connected' : 'PICkit offline',
-            style: const TextStyle(fontSize: 11),
-          ),
-        ],
-      ),
-    );
-  }
-}
+  LinearGradient get controlGradient => dark
+      ? const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1C2A3E), Color(0xFF131F31)])
+      : const LinearGradient(colors: [Color(0xFFFFFFFF), Color(0xFFEDF3F9)]);
 
-class _PropertyRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool showDivider;
+  LinearGradient get primaryGradient =>
+      const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF2E91FF), Color(0xFF0967E8)]);
 
-  const _PropertyRow({
-    required this.label,
-    required this.value,
-    this.showDivider = true,
-  });
+  LinearGradient get disconnectGradient => dark
+      ? const LinearGradient(colors: [Color(0xFF3A2630), Color(0xFF291D27)])
+      : const LinearGradient(colors: [Color(0xFFFFF2F3), Color(0xFFFCE7E9)]);
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        border: showDivider
-            ? Border(bottom: BorderSide(color: colors.outlineVariant))
-            : null,
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 122,
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 11.5, color: colors.onSurfaceVariant),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11.5, color: colors.onSurface),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+  LinearGradient get statusGradient => dark
+      ? const LinearGradient(colors: [Color(0xFF152235), Color(0xFF111D2D)])
+      : const LinearGradient(colors: [Color(0xFFF8FAFD), Color(0xFFEAF1F8)]);
 
-class _TargetHeading extends StatelessWidget {
-  final String name;
-  final String family;
-  final bool selected;
+  List<BoxShadow> get primaryShadow => [
+    BoxShadow(
+      color: primary.withValues(alpha: dark ? 0.28 : 0.18),
+      blurRadius: 14,
+      offset: const Offset(0, 4),
+    ),
+  ];
 
-  const _TargetHeading({
-    required this.name,
-    required this.family,
-    required this.selected,
-  });
+  List<BoxShadow> get panelShadow => [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: dark ? 0.22 : 0.07),
+      blurRadius: 14,
+      offset: const Offset(0, 5),
+    ),
+  ];
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: colors.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(
-            Icons.memory_rounded,
-            size: 20,
-            color: selected
-                ? colors.primary
-                : colors.onSurface.withValues(alpha: 0.3),
-          ),
-        ),
-        const SizedBox(width: 11),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: selected
-                      ? colors.onSurface
-                      : colors.onSurface.withValues(alpha: 0.38),
-                ),
-              ),
-              Text(
-                family,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TargetMetric extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _TargetMetric({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.only(right: 7),
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(5),
-          border: Border.all(color: colors.outlineVariant),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(fontSize: 9.5, color: colors.onSurfaceVariant),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11.5),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  List<BoxShadow> get controlShadow => [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: dark ? 0.2 : 0.05),
+      blurRadius: 6,
+      offset: const Offset(0, 2),
+    ),
+  ];
 }
