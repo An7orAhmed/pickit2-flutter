@@ -1502,6 +1502,21 @@ class _HexViewerState extends State<_HexViewer> with TickerProviderStateMixin {
     _sourceTabController.addListener(_onSourceChanged);
   }
 
+  @override
+  void didUpdateWidget(covariant _HexViewer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.sourceTabs, widget.sourceTabs)) {
+      _sourceTabController
+        ..removeListener(_onSourceChanged)
+        ..dispose();
+      final activeIndex = widget.sourceTabs.indexOf(_activeSource);
+      _sourceTabController = TabController(length: widget.sourceTabs.length, initialIndex: activeIndex < 0 ? 0 : activeIndex, vsync: this);
+      _sourceTabController.addListener(_onSourceChanged);
+      _activeSource = widget.sourceTabs[_sourceTabController.index];
+      _memTabController.index = 0;
+    }
+  }
+
   void _onSourceChanged() {
     if (!_sourceTabController.indexIsChanging) {
       setState(() {

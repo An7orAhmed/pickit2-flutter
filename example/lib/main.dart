@@ -6,9 +6,7 @@ import 'controller.dart';
 import 'home.dart';
 import 'theme_controller.dart';
 
-void main() {
-  runApp(const MyApp());
-}
+void main() => runApp(const MyApp());
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -37,16 +35,11 @@ class MyApp extends StatelessWidget {
   }
 
   ThemeData _buildTheme(Brightness brightness, bool desktop) {
-    final colors = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF277FE2),
-      brightness: brightness,
-    );
+    final colors = ColorScheme.fromSeed(seedColor: const Color(0xFF277FE2), brightness: brightness);
     return ThemeData(
       brightness: brightness,
       colorScheme: colors,
-      scaffoldBackgroundColor: brightness == Brightness.dark
-          ? const Color(0xFF0B1018)
-          : const Color(0xFFF3F5F8),
+      scaffoldBackgroundColor: brightness == Brightness.dark ? const Color(0xFF0B1018) : const Color(0xFFF3F5F8),
       visualDensity: desktop ? VisualDensity.compact : VisualDensity.standard,
       dividerColor: colors.outlineVariant,
       inputDecorationTheme: InputDecorationTheme(
