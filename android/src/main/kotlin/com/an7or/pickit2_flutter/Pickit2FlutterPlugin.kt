@@ -13,249 +13,108 @@ import java.io.File
 import java.io.FileReader
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import kotlin.math.min
 
 class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
   private lateinit var channel: MethodChannel
   private lateinit var context: Context
   private var usbDriver: PICkitUsbDriver? = null
+  private var nativeEngine: NativePk2Engine? = null
+  private var startupError: Exception? = null
   private val chipCatalog = ChipCatalog()
   private val backgroundExecutor: ExecutorService = Executors.newSingleThreadExecutor()
   private val mainHandler = Handler(Looper.getMainLooper())
-
   private val loadedImage = ProgramImage()
-  private var selectedPartInfo: Map<String, Any> = emptyMap()
+  private var selectedPartInfo: Map<String, Any?> = emptyMap()
+  private var serialNumber = ""
+  private var firmwareVersion = ""
+  private var lastReadAvailable = false
 
-  override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-    context = flutterPluginBinding.applicationContext
-    channel = MethodChannel(flutterPluginBinding.binaryMessenger, "pickit2_flutter")
+  override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    context = binding.applicationContext
+    channel = MethodChannel(binding.binaryMessenger, "pickit2_flutter")
     channel.setMethodCallHandler(this)
-    usbDriver = PICkitUsbDriver(context)
+    usbDriver = PICkitUsbDriver(context, ::handleDeviceDetached)
+    try {
+      nativeEngine = NativePk2Engine(prepareDeviceFile().absolutePath) { phase, percent, message ->
+        mainHandler.post {
+          channel.invokeMethod(
+            "onWriteProgress",
+            mapOf("phase" to phase, "percent" to percent, "message" to message),
+          )
+        }
+      }
+    } catch (error: Exception) {
+      startupError = error
+    }
   }
 
   override fun onMethodCall(call: MethodCall, result: Result) {
     when (call.method) {
-      "connect" -> {
-        usbDriver?.connect(object : PICkitUsbDriver.UsbCallback {
-          override fun onConnectionSuccess() {
-            result.success("Connected to PICkit 2 successfully!")
-          }
-          override fun onConnectionFailed(error: String) {
-            result.error("USB_ERROR", error, null)
-          }
-        })
-      }
-      "disconnect" -> {
+      "connect" -> connect(result)
+      "disconnect" -> runAsync(result, "DISCONNECT_ERROR") {
+        nativeEngine?.disconnect()
         usbDriver?.disconnect()
-        result.success("Disconnected")
+        serialNumber = ""
+        firmwareVersion = ""
+        selectedPartInfo = emptyMap()
+        lastReadAvailable = false
+        "Disconnected"
       }
-      "getSerialNumber" -> {
-        try {
-          result.success(usbDriver?.getSerialNumber())
-        } catch (e: Exception) {
-          result.error("SERIAL_ERROR", e.message, null)
-        }
+      "getSerialNumber" -> result.success(serialNumber)
+      "getFirmwareVersion" -> result.success(firmwareVersion)
+      "loadHexFile" -> runCatchingResult(result, "HEX_LOAD_ERROR") {
+        loadHexFile(call.argument("path"))
       }
-      "loadHexFile" -> {
-        val path = call.argument<String>("path")
-        try {
-          result.success(loadHexFile(path))
-        } catch (e: Exception) {
-          result.error("HEX_LOAD_ERROR", e.message, null)
-        }
-      }
-      "loadBinFile" -> {
-        val path = call.argument<String>("path")
-        val baseAddress = call.argument<Int>("baseAddress") ?: 0
-        try {
-          result.success(loadBinFile(path, baseAddress))
-        } catch (e: Exception) {
-          result.error("BIN_LOAD_ERROR", e.message, null)
-        }
+      "loadBinFile" -> runCatchingResult(result, "BIN_LOAD_ERROR") {
+        loadBinFile(call.argument("path"), call.argument<Int>("baseAddress") ?: 0)
       }
       "clearLoadedImage" -> {
         loadedImage.clear()
         result.success(true)
       }
-      "getLoadedImageInfo" -> {
-        result.success(loadedImage.summary())
+      "getLoadedImageInfo" -> result.success(loadedImage.summary())
+      "getLoadedImageData" -> result.success(loadedImageData())
+      "loadChipData", "loadChipDataFromDat" -> loadChipData(call, result)
+      "getChipCatalog" -> catalogResult(result) { chipCatalog.all() }
+      "getChipFamilies" -> catalogResult(result) { chipCatalog.families() }
+      "getChipModelsByFamily" -> catalogResult(result) {
+        val family = call.argument<String>("family")?.takeIf(String::isNotBlank)
+          ?: throw IllegalArgumentException("family is required")
+        chipCatalog.modelsByFamily(family)
       }
-      "getLoadedImageData" -> {
-        // Returns the full loaded image as [address1, value1, address2, value2, ...]
-        val bytes = loadedImage.getBytes()
-        val flat = mutableListOf<Int>()
-        for ((addr, value) in bytes) {
-          flat.add(addr)
-          flat.add(value)
-        }
-        result.success(mapOf(
-          "sourceType" to (loadedImage.summary()["sourceType"] ?: ""),
-          "loadedBytes" to loadedImage.size(),
-          "minAddress" to loadedImage.minAddress(),
-          "maxAddress" to loadedImage.maxAddress(),
-          "data" to flat,
-        ))
+      "selectChip" -> runAsync(result, "CHIP_SELECT_ERROR") {
+        selectedPartInfo = requireEngine().selectPart(call.argument<String>("model").orEmpty())
+        lastReadAvailable = false
+        true
       }
-      "loadChipData", "loadChipDataFromDat" -> {
-        runAsync(result, "CHIP_DATA_ERROR") {
-          val catalogPath = call.argument<String>("catalogPath")
-          val detectPath = call.argument<String>("detectPath")
-          val catalogBytes = if (catalogPath.isNullOrBlank()) {
-            context.assets.open("chip_catalog.csv").use { it.readBytes() }
-          } else {
-            File(catalogPath).readBytes()
-          }
-          val detectBytes = if (detectPath.isNullOrBlank()) {
-            context.assets.open("chip_detect.json").use { it.readBytes() }
-          } else {
-            File(detectPath).readBytes()
-          }
-          val loadedModelCount = chipCatalog.loadPrebuilt(catalogBytes, detectBytes)
-          if (loadedModelCount <= 0) {
-            throw IllegalStateException("No chip models parsed from generated assets")
-          }
-          mapOf(
-            "loaded" to true,
-            "familyCount" to chipCatalog.families().size,
-            "modelCount" to loadedModelCount,
-          )
+      "autoDetectChip" -> runAsync(result, "AUTO_DETECT_ERROR") {
+        requireCatalog()
+        requireEngine().autoDetect().also {
+          selectedPartInfo = it
+          lastReadAvailable = false
         }
       }
-      "getChipCatalog" -> {
-        if (!chipCatalog.isLoaded()) {
-          result.error("CHIP_DATA_NOT_LOADED", "Load chip data first using loadChipDataFromDat", null)
-        } else {
-          result.success(chipCatalog.all())
+      "eraseChip" -> runAsync(result, "ERASE_ERROR") {
+        requireEngine().erase().also { erased ->
+          if (erased) lastReadAvailable = false
         }
       }
-      "getChipFamilies" -> {
-        if (!chipCatalog.isLoaded()) {
-          result.error("CHIP_DATA_NOT_LOADED", "Load chip data first using loadChipDataFromDat", null)
-        } else {
-          result.success(chipCatalog.families())
-        }
+      "blankCheck" -> runAsync(result, "BLANK_CHECK_ERROR") { requireEngine().blankCheck() }
+      "readChip" -> runAsync(result, "READ_ERROR") {
+        requireEngine().read().also { lastReadAvailable = true }
       }
-      "getChipModelsByFamily" -> {
-        if (!chipCatalog.isLoaded()) {
-          result.error("CHIP_DATA_NOT_LOADED", "Load chip data first using loadChipDataFromDat", null)
-        } else {
-          val family = call.argument<String>("family")
-          if (family.isNullOrBlank()) {
-            result.error("INVALID_ARGUMENT", "family is required", null)
-          } else {
-            result.success(chipCatalog.modelsByFamily(family))
-          }
-        }
+      "saveHexFile", "saveReadHex" -> runAsync(result, "HEX_SAVE_ERROR") {
+        if (!lastReadAvailable) throw IllegalStateException("Read the target before exporting")
+        val path = call.argument<String>("path") ?: throw IllegalArgumentException("path is required")
+        requireEngine().exportHex(path)
       }
-      "autoDetectChip" -> {
-        if (!chipCatalog.isLoaded()) {
-          result.error("CHIP_DATA_NOT_LOADED", "Load chip data first using loadChipDataFromDat", null)
-        } else {
-          runAsync(result, "AUTO_DETECT_ERROR") {
-            val detected = usbDriver?.autoDetectTarget(chipCatalog)
-              ?: throw IllegalStateException("USB driver is unavailable")
-            if (detected["found"] == true) {
-              selectedPartInfo = mapOf(
-                "model" to (detected["model"] ?: ""),
-                ("flashSize" to detected["flashSize"]?.toString()),
-                ("eepromSize" to detected["eepromSize"]?.toString()),
-                "bytesPerLocation" to 2,
-                "eeMemBytesPerWord" to 1,
-                "eeAddr" to 0,
-                "configWords" to 0,
-              ) as Map<String, Any>
-            }
-            detected
-          }
-        }
+      "getConfigWords" -> result.success(configWords())
+      "setConfigWord" -> setConfigWord(call, result)
+      "writeFirmware" -> runImageOperation(result, "WRITE_ERROR") { path ->
+        requireEngine().writeHex(path).also { lastReadAvailable = false }
       }
-      "selectChip" -> {
-        val model = call.argument<String>("model") ?: ""
-        val flashSize = call.argument<String>("flashSize") ?: "0"
-        val eepromSize = call.argument<String>("eepromSize") ?: "0"
-        val bytesPerLocation = call.argument<Int>("bytesPerLocation") ?: 2
-        val eeMemBytesPerWord = call.argument<Int>("eeMemBytesPerWord") ?: 1
-        val eeAddr = call.argument<Int>("eeAddr") ?: 0
-        val configWords = call.argument<Int>("configWords") ?: 0
-        selectedPartInfo = mapOf(
-          "model" to model,
-          "flashSize" to flashSize,
-          "eepromSize" to eepromSize,
-          "bytesPerLocation" to bytesPerLocation,
-          "eeMemBytesPerWord" to eeMemBytesPerWord,
-          "eeAddr" to eeAddr,
-          "configWords" to configWords,
-        )
-        result.success(true)
-      }
-      "eraseChip" -> {
-        if (!chipCatalog.isLoaded()) {
-          result.error("CHIP_DATA_NOT_LOADED", "Load chip data first using loadChipDataFromDat", null)
-        } else {
-          runAsync(result, "ERASE_ERROR") {
-            usbDriver?.eraseChip(chipCatalog) ?: throw IllegalStateException("USB driver is unavailable")
-          }
-        }
-      }
-      "readChip" -> {
-        if (!chipCatalog.isLoaded()) {
-          result.error("CHIP_DATA_NOT_LOADED", "Load chip data first using loadChipDataFromDat", null)
-        } else {
-          runAsync(result, "READ_ERROR") {
-            usbDriver?.readChip(chipCatalog, selectedPartInfo) ?: throw IllegalStateException("USB driver is unavailable")
-          }
-        }
-      }
-      "saveHexFile" -> {
-        val path = call.argument<String>("path")
-        val data = call.argument<List<Int>>("data") ?: emptyList()
-        val addressIncrement = call.argument<Int>("addressIncrement") ?: 1
-        val bytesPerWord = call.argument<Int>("bytesPerWord") ?: 2
-        try {
-          val success = saveHexFile(path, data, addressIncrement, bytesPerWord)
-          result.success(success)
-        } catch (e: Exception) {
-          result.error("HEX_SAVE_ERROR", e.message, null)
-        }
-      }
-      "getFirmwareVersion" -> {
-        try {
-          result.success(usbDriver?.getFirmwareVersion())
-        } catch (e: Exception) {
-          result.error("FW_VERSION_ERROR", e.message, null)
-        }
-      }
-      "writeFirmware" -> {
-        if (!chipCatalog.isLoaded()) {
-          result.error("CHIP_DATA_NOT_LOADED", "Load chip data first using loadChipData", null)
-        } else if (selectedPartInfo.isEmpty()) {
-          result.error("NO_CHIP_SELECTED", "Select a target chip first", null)
-        } else if (!loadedImage.isEmpty()) {
-          // Use the already-loaded image; write with progress callbacks
-          runAsync(result, "WRITE_ERROR") {
-            val totalSteps = 6
-            var lastProgress = 0
-            val success = usbDriver?.writeFirmware(
-              catalog = chipCatalog,
-              partInfo = selectedPartInfo,
-              image = loadedImage,
-              skipBlankCheck = false,
-              progressCallback = { phase, percent, message ->
-                lastProgress = percent
-                mainHandler.post {
-                  channel.invokeMethod("onWriteProgress", mapOf(
-                    "phase" to phase,
-                    "percent" to percent,
-                    "message" to message,
-                  ))
-                }
-              },
-            ) ?: throw IllegalStateException("USB driver is unavailable")
-            mapOf("success" to success, "message" to if (success) "Write complete" else "Write failed")
-          }
-        } else {
-          result.error("NO_IMAGE", "Load a firmware file first", null)
-        }
+      "verifyFirmware" -> runImageOperation(result, "VERIFY_ERROR") { path ->
+        requireEngine().verifyHex(path)
       }
       else -> result.notImplemented()
     }
@@ -263,132 +122,256 @@ class Pickit2FlutterPlugin : FlutterPlugin, MethodCallHandler {
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
+    backgroundExecutor.shutdownNow()
+    nativeEngine?.close()
+    nativeEngine = null
     usbDriver?.destroy()
     usbDriver = null
-    backgroundExecutor.shutdownNow()
+  }
+
+  private fun connect(result: Result) {
+    val driver = usbDriver
+    if (driver == null) {
+      result.error("USB_ERROR", "USB transport is unavailable", null)
+      return
+    }
+    driver.connect(object : PICkitUsbDriver.UsbCallback {
+      override fun onConnectionSuccess() {
+        runAsync(result, "USB_ERROR") {
+          val engine = requireEngine()
+          try {
+            if (!engine.attachUsb(driver.fileDescriptor(), driver.serialNumber())) {
+              throw IllegalStateException("Unable to attach Android USB transport")
+            }
+            val info = engine.connect()
+            serialNumber = info["serialNumber"]?.toString().orEmpty()
+            firmwareVersion = info["firmwareVersion"]?.toString().orEmpty()
+            selectedPartInfo = emptyMap()
+            lastReadAvailable = false
+            "Connected to PICkit 2 successfully!"
+          } catch (error: Exception) {
+            engine.disconnect()
+            driver.disconnect()
+            throw error
+          }
+        }
+      }
+
+      override fun onConnectionFailed(error: String) {
+        result.error("USB_ERROR", error, null)
+      }
+    })
+  }
+
+  private fun loadChipData(call: MethodCall, result: Result) {
+    runAsync(result, "CHIP_DATA_ERROR") {
+      val catalogPath = call.argument<String>("catalogPath")
+      val detectPath = call.argument<String>("detectPath")
+      val catalogBytes = if (catalogPath.isNullOrBlank()) {
+        context.assets.open("chip_catalog.csv").use { it.readBytes() }
+      } else {
+        File(catalogPath).readBytes()
+      }
+      val detectBytes = if (detectPath.isNullOrBlank()) {
+        context.assets.open("chip_detect.json").use { it.readBytes() }
+      } else {
+        File(detectPath).readBytes()
+      }
+      val modelCount = chipCatalog.loadPrebuilt(catalogBytes, detectBytes)
+      if (modelCount <= 0) throw IllegalStateException("No chip models found in the catalog")
+      mapOf(
+        "loaded" to true,
+        "familyCount" to chipCatalog.families().size,
+        "modelCount" to modelCount,
+      )
+    }
   }
 
   private fun loadHexFile(path: String?): Map<String, Any> {
-    if (path == null) {
-      throw IllegalArgumentException("Path is required")
-    }
-    val file = File(path)
-    if (!file.exists()) {
-      throw IllegalArgumentException("HEX file not found: $path")
-    }
-    loadedImage.clear()
-    loadedImage.setSource("hex", path)
-
+    val file = requiredFile(path, "HEX")
+    val parsedImage = ProgramImage().apply { setSource("hex", file.absolutePath) }
     var upperLinear = 0
     var upperSegment = 0
+    var eof = false
+
     FileReader(file).useLines { lines ->
-      for (line in lines) {
-        val trimmed = line.trim().uppercase()
-        if (trimmed.isEmpty()) continue
-        if (!trimmed.startsWith(":") || trimmed.length < 11) continue
-
-        val count = trimmed.substring(1, 3).toInt(16)
-        val offset = trimmed.substring(3, 7).toInt(16)
-        val recType = trimmed.substring(7, 9).toInt(16)
-        val dataStart = 9
-
-        when (recType) {
+      lines.forEachIndexed { lineNumber, sourceLine ->
+        val line = sourceLine.trim().uppercase()
+        if (line.isEmpty()) return@forEachIndexed
+        if (!line.startsWith(":") || line.length < 11 || line.length % 2 == 0) {
+          throw IllegalArgumentException("Invalid Intel HEX record at line ${lineNumber + 1}")
+        }
+        val record = (1 until line.length step 2).map { line.substring(it, it + 2).toInt(16) }
+        val count = record[0]
+        if (record.size != count + 5 || record.sum().and(0xFF) != 0) {
+          throw IllegalArgumentException("Invalid Intel HEX checksum at line ${lineNumber + 1}")
+        }
+        val offset = (record[1] shl 8) or record[2]
+        when (record[3]) {
           0x00 -> {
             val base = (upperLinear shl 16) + (upperSegment shl 4) + offset
-            for (i in 0 until count) {
-              val b = trimmed.substring(dataStart + i * 2, dataStart + i * 2 + 2).toInt(16)
-              loadedImage.putByte(base + i, b)
-            }
+            repeat(count) { index -> parsedImage.putByte(base + index, record[4 + index]) }
           }
-          0x01 -> return loadedImage.summary()
+          0x01 -> eof = true
           0x02 -> {
-            upperSegment = trimmed.substring(dataStart, dataStart + 4).toInt(16)
+            upperSegment = (record[4] shl 8) or record[5]
             upperLinear = 0
           }
           0x04 -> {
-            upperLinear = trimmed.substring(dataStart, dataStart + 4).toInt(16)
+            upperLinear = (record[4] shl 8) or record[5]
             upperSegment = 0
           }
         }
       }
     }
+    if (!eof || parsedImage.isEmpty()) {
+      throw IllegalArgumentException("Intel HEX file is empty or missing its end record")
+    }
+    loadedImage.replaceWith(parsedImage)
     return loadedImage.summary()
   }
 
   private fun loadBinFile(path: String?, baseAddress: Int): Map<String, Any> {
-    if (path == null) {
-      throw IllegalArgumentException("Path is required")
-    }
-    val file = File(path)
-    if (!file.exists()) {
-      throw IllegalArgumentException("BIN file not found: $path")
-    }
-    loadedImage.clear()
-    loadedImage.setSource("bin", path)
-
-    BufferedInputStream(java.io.FileInputStream(file)).use { input ->
+    val file = requiredFile(path, "BIN")
+    require(baseAddress >= 0) { "baseAddress must not be negative" }
+    val parsedImage = ProgramImage().apply { setSource("bin", file.absolutePath) }
+    BufferedInputStream(file.inputStream()).use { input ->
       var offset = 0
-      var b: Int
-      while (input.read().also { b = it } >= 0) {
-        loadedImage.putByte(baseAddress + offset, b and 0xFF)
+      while (true) {
+        val value = input.read()
+        if (value < 0) break
+        parsedImage.putByte(baseAddress + offset, value)
         offset++
       }
     }
+    if (parsedImage.isEmpty()) throw IllegalArgumentException("BIN file is empty")
+    loadedImage.replaceWith(parsedImage)
     return loadedImage.summary()
   }
 
-  private fun runAsync(
-    result: Result,
-    errorCode: String,
-    task: () -> Any,
-  ) {
+  private fun handleDeviceDetached() {
+    if (backgroundExecutor.isShutdown) return
+    backgroundExecutor.execute {
+      nativeEngine?.disconnect()
+      serialNumber = ""
+      firmwareVersion = ""
+      selectedPartInfo = emptyMap()
+      lastReadAvailable = false
+      mainHandler.post { channel.invokeMethod("onDeviceDetached", null) }
+    }
+  }
+
+  private fun loadedImageData(): Map<String, Any> {
+    val data = ArrayList<Int>(loadedImage.size() * 2)
+    loadedImage.getBytes().forEach { (address, value) ->
+      data.add(address)
+      data.add(value)
+    }
+    return loadedImage.summary() + mapOf("data" to data, "configWords" to configWords())
+  }
+
+  private fun configWords(): List<Map<String, Any?>> {
+    val descriptors = selectedPartInfo["configWords"] as? List<*> ?: return emptyList()
+    return descriptors.mapNotNull { raw ->
+      val descriptor = (raw as? Map<*, *>)?.entries?.associate { it.key.toString() to it.value }
+        ?: return@mapNotNull null
+      val address = (descriptor["address"] as? Number)?.toInt() ?: return@mapNotNull descriptor
+      val blank = (descriptor["blank"] as? Number)?.toInt() ?: 0xFFFF
+      val byteCount = (descriptor["byteCount"] as? Number)?.toInt() ?: 2
+      var value = 0
+      repeat(byteCount) { offset ->
+        val fallback = (blank ushr (offset * 8)) and 0xFF
+        value = value or ((loadedImage.getByte(address + offset) ?: fallback) shl (offset * 8))
+      }
+      descriptor + ("value" to value)
+    }
+  }
+
+  private fun setConfigWord(call: MethodCall, result: Result) {
+    runCatchingResult(result, "INVALID_CONFIG") {
+      if (loadedImage.isEmpty()) throw IllegalStateException("Load a firmware image first")
+      val index = call.argument<Int>("index") ?: throw IllegalArgumentException("index is required")
+      val requestedValue = call.argument<Int>("value") ?: throw IllegalArgumentException("value is required")
+      val descriptor = configWords().firstOrNull { (it["index"] as? Number)?.toInt() == index }
+        ?: throw IllegalArgumentException("Invalid configuration word")
+      val address = (descriptor["address"] as Number).toInt()
+      val byteCount = (descriptor["byteCount"] as? Number)?.toInt() ?: 2
+      val mask = (descriptor["mask"] as? Number)?.toInt() ?: 0xFFFF
+      val blank = (descriptor["blank"] as? Number)?.toInt() ?: 0xFFFF
+      val sanitized = (requestedValue and mask) or (blank and mask.inv())
+      repeat(byteCount) { offset ->
+        loadedImage.putByte(address + offset, sanitized ushr (offset * 8))
+      }
+      descriptor + ("value" to sanitized)
+    }
+  }
+
+  private fun runImageOperation(result: Result, code: String, operation: (String) -> Any) {
+    if (loadedImage.isEmpty()) {
+      result.error("NO_IMAGE", "Load a firmware image first", null)
+      return
+    }
+    runAsync(result, code) {
+      val temporary = File.createTempFile("pickit2-", ".hex", context.cacheDir)
+      try {
+        loadedImage.writeHex(temporary)
+        operation(temporary.absolutePath)
+      } finally {
+        temporary.delete()
+      }
+    }
+  }
+
+  private fun prepareDeviceFile(): File {
+    val directory = File(context.filesDir, "pickit2").apply { mkdirs() }
+    val destination = File(directory, "PK2DeviceFile.dat")
+    val bundled = context.assets.open("PK2DeviceFile.dat").use { it.readBytes() }
+    if (!destination.exists() || !destination.readBytes().contentEquals(bundled)) {
+      destination.writeBytes(bundled)
+    }
+    return destination
+  }
+
+  private fun requireEngine(): NativePk2Engine {
+    return nativeEngine ?: throw IllegalStateException(
+      startupError?.message ?: "PICkit 2 native engine is unavailable",
+    )
+  }
+
+  private fun requireCatalog() {
+    if (!chipCatalog.isLoaded()) throw IllegalStateException("Load chip data first")
+  }
+
+  private fun requiredFile(path: String?, type: String): File {
+    val value = path?.takeIf(String::isNotBlank)
+      ?: throw IllegalArgumentException("$type file path is required")
+    return File(value).takeIf(File::isFile)
+      ?: throw IllegalArgumentException("$type file not found: $value")
+  }
+
+  private fun catalogResult(result: Result, operation: () -> Any) {
+    runCatchingResult(result, "CHIP_DATA_NOT_LOADED") {
+      requireCatalog()
+      operation()
+    }
+  }
+
+  private fun runCatchingResult(result: Result, code: String, operation: () -> Any) {
+    try {
+      result.success(operation())
+    } catch (error: Exception) {
+      result.error(code, error.message, null)
+    }
+  }
+
+  private fun runAsync(result: Result, code: String, operation: () -> Any) {
     backgroundExecutor.execute {
       try {
-        val value = task()
+        val value = operation()
         mainHandler.post { result.success(value) }
-      } catch (e: Exception) {
-        mainHandler.post { result.error(errorCode, e.message, null) }
+      } catch (error: Exception) {
+        mainHandler.post { result.error(code, error.message, null) }
       }
     }
-  }
-
-  private fun saveHexFile(path: String?, data: List<Int>, addressIncrement: Int, bytesPerWord: Int): Boolean {
-    if (path == null) {
-      throw IllegalArgumentException("Path is required")
-    }
-    val file = File(path)
-    file.printWriter().use { out ->
-      out.println(":020000040000FA")
-      val arrayIncrement = 16 / bytesPerWord
-      for (arrayIndex in data.indices step arrayIncrement) {
-        val endIndex = min(arrayIndex + arrayIncrement, data.size)
-        val validBytes = (endIndex - arrayIndex) * bytesPerWord
-        val fileAddress = arrayIndex / arrayIncrement * 16
-        if (validBytes > 0) {
-          val hexLine = buildString {
-            append(":").append(String.format("%02X", validBytes)).append(String.format("%04X", fileAddress)).append("00")
-            for (i in arrayIndex until endIndex) {
-              val word = data[i] and 0xFFFFFF
-              for (j in 0 until bytesPerWord) {
-                append(String.format("%02X", (word shr (8 * (bytesPerWord - 1 - j)) and 0xFF)))
-              }
-            }
-            val checksum = computeChecksum(this.toString())
-            append(String.format("%02X", checksum))
-          }
-          out.println(hexLine)
-        }
-      }
-      out.println(":00000001FF")
-    }
-    return true
-  }
-
-  private fun computeChecksum(line: String): Int {
-    var checksum = 0
-    for (i in 1 until line.length step 2) {
-      checksum += line.substring(i, i + 2).toInt(16)
-    }
-    return (0 - checksum) and 0xFF
   }
 }

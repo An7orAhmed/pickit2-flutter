@@ -62,12 +62,12 @@ extern int	fopen_s(FILE **fp, char *path, const char *spec);
 
 #endif
 
-#ifndef __APPLE__  // defining bool to char causes compile problem on OSX 10.13, maybe also on other versions
+#if !defined(__APPLE__) && !defined(__ANDROID__)  // defining bool to char causes compile problem with modern C++ runtimes
 // Not all compilers define 'bool' to have the same size, so we force it here.
 #ifdef bool
 #undef bool
 #endif
 #define	bool	unsigned char
-#endif // APPLE
+#endif
 
 // TODO: reference additional headers your program requires here

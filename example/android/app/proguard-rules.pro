@@ -1,0 +1,1 @@
+-keep class com.an7or.pickit2_flutter.NativePk2Engine { *; }

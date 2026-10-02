@@ -40,6 +40,10 @@ class HomeController extends ChangeNotifier {
   int readConfigBaseAddress = 0;
   List<Map<String, dynamic>> configWords = [];
 
+  HomeController() {
+    _pickit2.onDeviceDetached = _handleDeviceDetached;
+  }
+
   // Imported firmware image bytes (address → byte)
   Map<int, int> importedImageBytes = {};
   int importedMinAddr = 0;
@@ -650,5 +654,19 @@ class HomeController extends ChangeNotifier {
     return selectedChipFamily == allFamiliesOption
         ? deviceFamily
         : selectedChipFamily;
+  }
+
+  void _handleDeviceDetached() {
+    connected = false;
+    busy = false;
+    programming = false;
+    progress = 0;
+    serialNumber = 'N/A';
+    programmerFirmware = 'N/A';
+    chipSelected = false;
+    targetDevice = 'Select a Chip';
+    deviceFamily = 'Import Firmware';
+    connectionStatus = 'PICkit 2 disconnected';
+    notifyListeners();
   }
 }

@@ -1,5 +1,6 @@
 package com.an7or.pickit2_flutter
 
+import java.io.File
 import java.util.TreeMap
 
 class ProgramImage {
@@ -19,6 +20,13 @@ class ProgramImage {
     out.sourceType = sourceType
     out.bytes.putAll(bytes)
     return out
+  }
+
+  fun replaceWith(source: ProgramImage) {
+    sourcePath = source.sourcePath
+    sourceType = source.sourceType
+    bytes.clear()
+    bytes.putAll(source.bytes)
   }
 
   fun setSource(sourceType: String, sourcePath: String) {
@@ -71,4 +79,53 @@ class ProgramImage {
   }
 
   fun getBytes(): Map<Int, Int> = bytes
+
+  fun writeHex(file: File) {
+    file.bufferedWriter().use { output ->
+      var upperAddress = -1
+      val entries = bytes.entries.toList()
+      var index = 0
+      while (index < entries.size) {
+        val startAddress = entries[index].key
+        val nextUpperAddress = startAddress ushr 16
+        if (nextUpperAddress != upperAddress) {
+          upperAddress = nextUpperAddress
+          output.appendLine(record(0, 0x04, byteArrayOf(
+            ((upperAddress ushr 8) and 0xFF).toByte(),
+            (upperAddress and 0xFF).toByte(),
+          )))
+        }
+
+        val data = ArrayList<Byte>(16)
+        var expectedAddress = startAddress
+        while (
+          index < entries.size &&
+          entries[index].key == expectedAddress &&
+          entries[index].key ushr 16 == upperAddress &&
+          data.size < 16
+        ) {
+          data.add(entries[index].value.toByte())
+          expectedAddress++
+          index++
+        }
+        output.appendLine(record(startAddress and 0xFFFF, 0x00, data.toByteArray()))
+      }
+      output.appendLine(":00000001FF")
+    }
+  }
+
+  private fun record(address: Int, type: Int, data: ByteArray): String {
+    val values = ArrayList<Int>(data.size + 4)
+    values.add(data.size)
+    values.add((address ushr 8) and 0xFF)
+    values.add(address and 0xFF)
+    values.add(type)
+    data.forEach { values.add(it.toInt() and 0xFF) }
+    val checksum = (-values.sum()) and 0xFF
+    return buildString {
+      append(':')
+      values.forEach { append("%02X".format(it)) }
+      append("%02X".format(checksum))
+    }
+  }
 }

@@ -7,6 +7,7 @@ class Pickit2Flutter {
 
   /// Callback for write firmware progress updates.
   void Function(String phase, int percent, String message)? onWriteProgress;
+  void Function()? onDeviceDetached;
 
   Pickit2Flutter() {
     _channel.setMethodCallHandler(_handleMethodCall);
@@ -19,6 +20,9 @@ class Pickit2Flutter {
         final percent = call.arguments['percent'] as int? ?? 0;
         final message = call.arguments['message'] as String? ?? '';
         onWriteProgress?.call(phase, percent, message);
+        break;
+      case 'onDeviceDetached':
+        onDeviceDetached?.call();
         break;
     }
   }
